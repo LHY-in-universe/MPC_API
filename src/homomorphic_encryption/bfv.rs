@@ -29,6 +29,14 @@ pub struct BFVCiphertext {
     pub c1: Vec<u64>, // second component
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BFVPlaintext {
+    pub coefficients: Vec<u64>,
+}
+
+// Type aliases for compatibility
+pub type BFVSecretKey = BFVPrivateKey;
+
 pub struct BFV;
 
 impl BFV {

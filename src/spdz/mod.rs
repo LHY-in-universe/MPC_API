@@ -4,18 +4,12 @@
 //! that enables parties to jointly compute functions over private inputs.
 
 pub mod share;
-pub mod offline;
-pub mod online;
-pub mod preprocessing;
 
 pub use share::*;
-pub use offline::*;
-pub use online::*;
-pub use preprocessing::*;
 
 use crate::{MpcError, Result};
 use crate::secret_sharing::{FIELD_PRIME, field_add, field_sub, field_mul};
-use crate::authentication::{HMAC, HmacKey, HmacTag};
+use crate::authentication::{HMAC, HmacKey};
 use rand::{Rng, thread_rng};
 use serde::{Deserialize, Serialize};
 

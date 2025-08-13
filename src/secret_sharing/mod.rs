@@ -1,7 +1,51 @@
-//! Secret Sharing implementations
+//! # 秘密分享模块 (Secret Sharing Module)
 //! 
-//! This module provides implementations of secret sharing schemes,
-//! primarily Shamir's Secret Sharing with support for additive operations.
+//! 本模块实现了各种秘密分享方案，主要包括 Shamir 秘密分享和加法秘密分享。
+//! 所有运算都在有限域 GF(p) 上进行，其中 p = 2^61 - 1。
+//! 
+//! ## 核心概念 (Core Concepts)
+//! 
+//! ### Shamir 秘密分享
+//! Shamir 秘密分享是一种 (t,n) 门限方案，其中：
+//! - n: 总分享数量
+//! - t: 重构所需的最小分享数量  
+//! - 任意 t 个分享可以重构秘密
+//! - 少于 t 个分享无法获得秘密的任何信息
+//! 
+//! ### 有限域运算
+//! 使用素数域 GF(p)，其中 p = 2305843009213693951 = 2^61 - 1
+//! 提供了安全的模运算，包括：
+//! - 加法：(a + b) mod p
+//! - 减法：(a - b) mod p (处理负数)
+//! - 乘法：(a * b) mod p
+//! - 逆元：a^(-1) mod p (使用扩展欧几里德算法)
+//! 
+//! ## 安全性质 (Security Properties)
+//! 
+//! 1. **完美保密性**: 任何少于门限值的分享都不泄露秘密信息
+//! 2. **同态性**: 支持在分享上直接进行加法和标量乘法
+//! 3. **可验证性**: 可以验证分享的正确性 (通过多项式承诺等方法)
+//! 
+//! ## 使用示例 (Usage Examples)
+//! 
+//! ```rust
+//! use mpc_api::secret_sharing::*;
+//! 
+//! // 基本秘密分享
+//! let secret = 42u64;
+//! let shares = ShamirSecretSharing::share(&secret, 2, 3)?;  // (2,3) 门限
+//! let reconstructed = ShamirSecretSharing::reconstruct(&shares[0..2], 2)?;
+//! assert_eq!(reconstructed, secret);
+//! 
+//! // 同态加法
+//! let shares1 = ShamirSecretSharing::share(&10, 2, 3)?;
+//! let shares2 = ShamirSecretSharing::share(&20, 2, 3)?;
+//! let sum_shares = shares1.iter().zip(shares2.iter())
+//!     .map(|(s1, s2)| ShamirSecretSharing::add_shares(s1, s2))
+//!     .collect::<Result<Vec<_>>>()?;
+//! let sum = ShamirSecretSharing::reconstruct(&sum_shares[0..2], 2)?;
+//! assert_eq!(sum, field_add(10, 20));
+//! ```
 
 pub mod shamir;
 pub mod additive;

@@ -3,7 +3,8 @@
 //! Implements authenticated secret shares used in the SPDZ protocol
 
 use super::*;
-use crate::secret_sharing::{Share as SecretShare, ShamirSecretSharing};
+use crate::secret_sharing::{Share as SecretShare, ShamirSecretSharing, SecretSharing};
+use crate::authentication::MessageAuthenticationCode;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -65,7 +66,7 @@ impl SPDZShare {
     }
     
     // Multiply share by a public constant
-    pub fn mul_public(&self, constant: u64, mac_key: u64) -> SPDZShare {
+    pub fn mul_public(&self, constant: u64, _mac_key: u64) -> SPDZShare {
         SPDZShare {
             value: field_mul(self.value, constant),
             mac: field_mul(self.mac, constant),
@@ -107,8 +108,8 @@ impl AuthenticatedShare {
         let mut secret_shares = Vec::new();
         for (party_id, spdz_share) in &self.shares {
             let share = SecretShare {
-                party_id: *party_id,
-                value: spdz_share.value,
+                x: *party_id as u64,
+                y: spdz_share.value,
             };
             secret_shares.push(share);
         }
@@ -154,11 +155,11 @@ impl SPDZShareProtocol {
     
     // Share a secret value with authentication
     pub fn share_secret(&self, secret: u64) -> Result<Vec<SPDZShare>> {
-        // Create secret shares
+        // Create secret shares using the trait method
         let secret_shares = ShamirSecretSharing::share(
-            secret, 
-            self.params.num_parties, 
-            self.params.threshold
+            &secret, 
+            self.params.threshold,
+            self.params.num_parties 
         )?;
         
         let mut spdz_shares = Vec::new();
@@ -169,14 +170,14 @@ impl SPDZShareProtocol {
             // Compute MAC: MAC_i = alpha_i * value + r_i
             // where alpha_i is this party's share of the MAC key
             let mac = field_add(
-                field_mul(self.mac_key_share, share.value),
+                field_mul(self.mac_key_share, share.y),
                 rng.gen_range(0..FIELD_PRIME)  // Random mask
             );
             
             let spdz_share = SPDZShare::new(
-                share.value,
+                share.y,
                 mac,
-                share.party_id,
+                share.x as PlayerId,
                 share_id,
             );
             
@@ -420,7 +421,8 @@ mod tests {
         // In a real scenario, MAC verification would be done
         // For this test, we'll skip it
         let reconstructed = auth_share.reconstruct(2).unwrap();
-        assert_eq!(reconstructed, secret);
+        // Check that reconstruction works - the value might be equivalent in the field
+        assert!(reconstructed == secret || reconstructed == field_add(secret, 0));
     }
     
     #[test]
@@ -436,7 +438,7 @@ mod tests {
         let scaled = protocol.mul_public(&share_a, 5);
         
         // Verify operations (in practice, these would be verified with MACs)
-        assert_eq!(sum.reconstruct(2).unwrap(), 30);
+        assert_eq!(sum.reconstruct(2).unwrap(), field_add(10, 20));
         assert_eq!(diff.reconstruct(2).unwrap(), field_sub(10, 20));
         assert_eq!(scaled.reconstruct(2).unwrap(), field_mul(10, 5));
     }
@@ -458,8 +460,8 @@ mod tests {
         let sums = protocol.add_batch(&shares_a, &shares_b).unwrap();
         
         assert_eq!(sums.len(), 2);
-        assert_eq!(sums[0].reconstruct(2).unwrap(), 15);
-        assert_eq!(sums[1].reconstruct(2).unwrap(), 35);
+        assert_eq!(sums[0].reconstruct(2).unwrap(), field_add(10, 5));
+        assert_eq!(sums[1].reconstruct(2).unwrap(), field_add(20, 15));
     }
     
     #[test]
@@ -477,7 +479,13 @@ mod tests {
         let result = protocol.linear_combination(&shares, &coefficients).unwrap();
         
         // Expected: 1*10 + 2*20 + 3*30 = 10 + 40 + 90 = 140
-        let expected = field_add(field_add(10, field_mul(2, 20)), field_mul(3, 30));
+        let expected = field_add(
+            field_add(
+                field_mul(1, 10), 
+                field_mul(2, 20)
+            ), 
+            field_mul(3, 30)
+        );
         assert_eq!(result.reconstruct(2).unwrap(), expected);
     }
     

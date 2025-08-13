@@ -90,8 +90,8 @@ impl Poly1305 {
             accumulator = ((accumulator + block_value) % POLY1305_PRIME * r_value) % POLY1305_PRIME;
         }
         
-        // Add s and reduce to get final tag
-        let final_value = (accumulator + s_value) % ((1u128 << 128) - 1);
+        // Add s and reduce to get final tag  
+        let final_value = (accumulator + s_value) % (u128::MAX);
         Self::u128_to_bytes(final_value)
     }
     

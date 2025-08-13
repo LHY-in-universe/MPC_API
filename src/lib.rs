@@ -1,14 +1,76 @@
-//! MPC API - A comprehensive Multi-Party Computation library in Rust
+//! # MPC API - 安全多方计算 (Secure Multi-Party Computation) 库
 //! 
-//! This library provides implementations of various cryptographic primitives
-//! and protocols for secure multi-party computation, including:
+//! 这是一个用 Rust 实现的全面的安全多方计算库，提供了各种密码学原语和协议的实现。
+//! 所有计算都在 u64 有限域上进行，使用素数 p = 2^61 - 1 作为模数。
 //! 
-//! - Secret Sharing (Shamir's Secret Sharing)
-//! - Garbled Circuits
-//! - Oblivious Transfer protocols
-//! - Homomorphic Encryption schemes
-//! - Elliptic Curve Cryptography
-//! - Advanced protocols (SPDZ, Zero-Knowledge Proofs, etc.)
+//! ## 核心组件 (Core Components)
+//! 
+//! ### 秘密分享 (Secret Sharing)
+//! - **Shamir 秘密分享**: 基于多项式插值的 (t,n) 门限秘密分享
+//! - **加法秘密分享**: 支持加法同态运算的简单分享方案
+//! 
+//! ### 混淆电路 (Garbled Circuits)  
+//! - **电路混淆**: 将布尔电路转换为混淆电路
+//! - **Free XOR 优化**: 提高 XOR 门的效率
+//! - **电路求值**: 安全地计算混淆电路
+//! 
+//! ### 不经意传输 (Oblivious Transfer)
+//! - **基础 OT**: 1-out-of-2 不经意传输
+//! - **相关 OT**: 具有固定偏移的相关不经意传输  
+//! - **随机 OT**: 生成随机共享的不经意传输
+//! - **OT 扩展**: 从少量基础 OT 扩展到大量 OT
+//! 
+//! ### 向量不经意线性求值 (Vector Oblivious Linear Evaluation)
+//! - **VOLE**: 向量不经意线性函数求值
+//! - **OLE**: 标量不经意线性函数求值
+//! 
+//! ### 同态加密 (Homomorphic Encryption)
+//! - **ElGamal**: 乘法同态加密
+//! - **Paillier**: 加法同态加密
+//! - **RSA**: 乘法同态加密
+//! - **BFV/BGV**: 全同态加密方案 (简化版)
+//! 
+//! ### 椭圆曲线密码学 (Elliptic Curve Cryptography)
+//! - **ECDH**: 椭圆曲线 Diffie-Hellman 密钥交换
+//! - **ECDSA**: 椭圆曲线数字签名算法
+//! - **点运算**: 椭圆曲线上的基本运算
+//! 
+//! ### 高级协议 (Advanced Protocols)
+//! - **投币协议**: 安全的随机数生成协议
+//! - **承诺方案**: Pedersen、Hash-based、Merkle tree 承诺
+//! - **消息认证码**: HMAC、Poly1305、GMAC、CMAC
+//! - **SPDZ 协议**: 带认证的秘密分享协议
+//! 
+//! ## 设计原则 (Design Principles)
+//! 
+//! 1. **安全性**: 所有协议都实现了标准的安全性要求
+//! 2. **效率**: 针对批处理操作进行了优化
+//! 3. **模块化**: 每个组件都可以独立使用
+//! 4. **可扩展性**: 基于特征的设计便于添加新实现
+//! 5. **有限域运算**: 所有计算都在 u64 有限域上进行
+//! 
+//! ## 使用示例 (Usage Examples)
+//! 
+//! ```rust
+//! use mpc_api::*;
+//! 
+//! // 秘密分享示例
+//! let secret = 42u64;
+//! let shares = ShamirSecretSharing::share(&secret, 2, 3)?;
+//! let reconstructed = ShamirSecretSharing::reconstruct(&shares[0..2], 2)?;
+//! assert_eq!(reconstructed, secret);
+//! 
+//! // SPDZ 协议示例
+//! let params = SPDZParams::new(3, 0, 2);
+//! let protocol = SPDZShareProtocol::new(params)?;
+//! let auth_share = protocol.input(42)?;
+//! ```
+//! 
+//! ## 安全注意事项 (Security Notes)
+//! 
+//! - 此库仅供学术研究和教育用途
+//! - 在生产环境中使用前需要经过安全审计
+//! - 某些实现为了简化而做了安全性权衡
 
 pub mod secret_sharing;
 pub mod garbled_circuits;
