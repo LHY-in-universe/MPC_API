@@ -3,12 +3,12 @@
 //! Implements the Poly1305 MAC algorithm using finite field arithmetic
 
 use crate::{MpcError, Result};
-use crate::secret_sharing::FIELD_PRIME;
-use super::{MessageAuthenticationCode, MacTag, UnforgeableMac, SecureMac};
+// use crate::secret_sharing::FIELD_PRIME; // Unused import
+use super::{MessageAuthenticationCode, UnforgeableMac, SecureMac};
 use rand::{Rng, thread_rng};
 use serde::{Deserialize, Serialize};
 
-const POLY1305_KEY_SIZE: usize = 32;
+const _POLY1305_KEY_SIZE: usize = 32; // Prefix with underscore to avoid unused warning
 const POLY1305_TAG_SIZE: usize = 16;
 const POLY1305_BLOCK_SIZE: usize = 16;
 
@@ -63,6 +63,12 @@ impl MessageAuthenticationCode for Poly1305 {
     fn verify(key: &Self::Key, message: &Self::Message, tag: &Self::Tag) -> bool {
         let computed_tag = Self::authenticate(key, message);
         Self::secure_compare(&computed_tag.tag, &tag.tag)
+    }
+}
+
+impl Default for Poly1305 {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

@@ -23,9 +23,9 @@ pub use vole::*;
 pub use ole::*;
 
 use crate::{MpcError, Result};
-use crate::secret_sharing::{FIELD_PRIME, field_add, field_mul, field_sub};
+use crate::secret_sharing::{FIELD_PRIME, field_add, field_mul};
 use serde::{Deserialize, Serialize};
-use rand::{Rng, RngCore};
+use rand::Rng;
 
 pub type OTMessage = Vec<u8>;
 pub type ChoiceBit = bool;
@@ -108,12 +108,8 @@ pub fn xor_bytes(a: &[u8], b: &[u8]) -> Vec<u8> {
     a.iter().zip(b.iter()).map(|(x, y)| x ^ y).collect()
 }
 
-pub fn random_bytes(len: usize) -> Vec<u8> {
-    let mut rng = rand::thread_rng();
-    let mut bytes = vec![0u8; len];
-    rng.fill_bytes(&mut bytes);
-    bytes
-}
+// random_bytes function removed to avoid duplicate definition
+// Use crate::utils::random_bytes instead
 
 pub fn hash_to_bytes(input: u64) -> Vec<u8> {
     use sha2::{Sha256, Digest};

@@ -4,7 +4,7 @@
 //! A full implementation would require more sophisticated polynomial arithmetic and noise management.
 
 use super::*;
-use rand::{Rng, thread_rng};
+use rand::Rng;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BFVPublicKey {

@@ -73,7 +73,7 @@ impl RandomOT {
         // Generate three random OT instances
         let (a0, a1, a_recv) = self.execute_random_ot(choices[0])?;
         let (b0, b1, b_recv) = self.execute_random_ot(choices[1])?;
-        let (c0, c1, c_recv) = self.execute_random_ot(choices[2])?;
+        let (_c0, _c1, c_recv) = self.execute_random_ot(choices[2])?;
         
         // For now, we'll create a simple triple (not cryptographically secure)
         // In practice, this requires more sophisticated protocols

@@ -7,9 +7,15 @@
 use super::{Share, SecretSharing, AdditiveSecretSharing, FIELD_PRIME, field_add, field_sub, field_mul, field_inv};
 use crate::{MpcError, Result};
 use rand::Rng;
-use serde::{Deserialize, Serialize};
+// use serde::{Deserialize, Serialize}; // Commented out unused imports
 
 pub struct ShamirSecretSharing;
+
+impl Default for ShamirSecretSharing {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl ShamirSecretSharing {
     pub fn new() -> Self {

@@ -82,6 +82,12 @@ impl SPDZShare {
     }
 }
 
+impl Default for AuthenticatedShare {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AuthenticatedShare {
     pub fn new() -> Self {
         Self {

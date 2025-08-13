@@ -1,7 +1,7 @@
 //! Circuit representation and basic operations
 
 use super::*;
-use std::collections::HashMap;
+// use std::collections::HashMap; // Unused import
 
 #[derive(Debug, Clone)]
 pub struct Circuit {

@@ -54,7 +54,7 @@ pub use shamir::*;
 pub use additive::*;
 
 use serde::{Deserialize, Serialize};
-use crate::{MpcError, Result};
+use crate::Result;
 
 // Using u64 finite field operations
 pub const FIELD_PRIME: u64 = 2305843009213693951; // 2^61 - 1, a large prime

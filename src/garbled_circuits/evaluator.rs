@@ -1,7 +1,7 @@
 //! Evaluator implementation for garbled circuits
 
 use super::*;
-use std::collections::HashMap;
+// use std::collections::HashMap; // Unused import
 
 pub struct Evaluator {
     wire_state: WireState,

@@ -1,6 +1,6 @@
 //! Mathematical utility functions
 
-use crate::secret_sharing::FIELD_PRIME;
+// use crate::secret_sharing::FIELD_PRIME; // Unused import
 
 pub fn gcd(a: u64, b: u64) -> u64 {
     if b == 0 {

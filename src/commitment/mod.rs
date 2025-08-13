@@ -10,8 +10,8 @@ pub use pedersen::*;
 pub use hash_commit::*;
 pub use merkle_tree::*;
 
-use crate::{MpcError, Result};
-use serde::{Deserialize, Serialize};
+// use crate::Result; // Unused import
+// use serde::{Deserialize, Serialize}; // Unused imports
 
 pub trait CommitmentScheme {
     type Commitment;

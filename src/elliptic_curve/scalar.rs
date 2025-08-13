@@ -1,6 +1,6 @@
 //! Scalar arithmetic for elliptic curves
 
-use super::*;
+// use super::*; // Unused import
 use crate::secret_sharing::FIELD_PRIME;
 
 #[derive(Debug, Clone, PartialEq)]

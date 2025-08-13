@@ -1,7 +1,7 @@
 //! RSA encryption scheme (multiplicatively homomorphic)
 
 use super::*;
-use crate::secret_sharing::{field_mul};
+// use crate::secret_sharing::{field_mul}; // Unused import
 use rand::{Rng, thread_rng};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,7 +1,7 @@
 //! Paillier encryption scheme (additively homomorphic)
 
 use super::*;
-use crate::secret_sharing::{field_add, field_mul};
+// use crate::secret_sharing::{field_add, field_mul}; // Unused imports
 use rand::{Rng, thread_rng};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

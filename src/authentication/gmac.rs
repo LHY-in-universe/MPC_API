@@ -63,6 +63,12 @@ impl MessageAuthenticationCode for GMAC {
     }
 }
 
+impl Default for GMAC {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GMAC {
     pub fn new() -> Self {
         GMAC

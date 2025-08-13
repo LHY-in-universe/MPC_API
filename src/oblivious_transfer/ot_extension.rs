@@ -22,7 +22,7 @@ impl OTExtension {
         
         for i in 0..self.security_parameter {
             let choice = (i % 2) == 0; // Alternate choices for demo
-            let (r0, r1, rb) = random_ot.execute_random_ot(choice)?;
+            let (r0, r1, _rb) = random_ot.execute_random_ot(choice)?;
             self.base_ots.push((r0, r1));
         }
         
@@ -44,10 +44,10 @@ impl OTExtension {
         // Simplified OT extension (real implementations are more complex)
         for i in 0..num_ots {
             let base_index = i % self.base_ots.len();
-            let (base_r0, base_r1) = self.base_ots[base_index];
+            let (base_r0, _base_r1) = self.base_ots[base_index];
             
             // Use base OT outputs to derive new OT values
-            let seed = field_add(base_r0, (i as u64));
+            let seed = field_add(base_r0, i as u64);
             let derived_r0 = self.hash_expand(seed, 0);
             let derived_r1 = self.hash_expand(seed, 1);
             

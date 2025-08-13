@@ -4,7 +4,7 @@
 //! into n random shares that sum to the original secret.
 //! All operations are performed in u64 finite field.
 
-use super::{Share, SecretSharing, AdditiveSecretSharing, FIELD_PRIME, field_add, field_sub, field_mul};
+use super::{FIELD_PRIME, field_add, field_sub, field_mul};
 use crate::{MpcError, Result};
 use rand::Rng;
 
@@ -20,6 +20,12 @@ impl AdditiveShare {
 }
 
 pub struct AdditiveSecretSharingScheme;
+
+impl Default for AdditiveSecretSharingScheme {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl AdditiveSecretSharingScheme {
     pub fn new() -> Self {

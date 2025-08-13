@@ -24,7 +24,7 @@
 //! 适用于对安全性要求极高的场景。
 
 use super::*;
-use crate::homomorphic_encryption::{BFV, BFVCiphertext, BFVPlaintext, BFVPublicKey, BFVSecretKey};
+use crate::homomorphic_encryption::{BFVCiphertext, BFVPlaintext, BFVPublicKey, BFVSecretKey};
 use crate::secret_sharing::{ShamirSecretSharing, SecretSharing};
 
 /// 基于 BFV 的 Beaver 三元组生成器
@@ -168,10 +168,10 @@ impl BFVBeaverGenerator {
         // 其中 Δ 是缩放因子，e1, e2 是噪声
         
         let c0: Vec<u64> = (0..self.public_key.a.len())
-            .map(|i| {
+            .map(|_i| {
                 let noise = rng.gen_range(0..100); // 小的噪声
                 field_add(
-                    field_mul(plaintext.coefficients.get(0).unwrap_or(&0), 1000), // 缩放
+                    field_mul(*plaintext.coefficients.first().unwrap_or(&0), 1000), // 缩放
                     noise
                 )
             })
@@ -219,8 +219,15 @@ impl BFVBeaverGenerator {
             return Err(MpcError::CryptographicError("Empty ciphertext".to_string()));
         }
         
-        // 简化解密：从第一个系数恢复值
-        let decrypted_coeff = ciphertext.c0[0];
+        // 使用私钥分享计算部分解密
+        // 简化版：使用 secret_key_share 进行解密
+        let secret_contribution = if !self.secret_key_share.s.is_empty() {
+            field_mul(ciphertext.c1[0], self.secret_key_share.s[0])
+        } else {
+            0
+        };
+        
+        let decrypted_coeff = field_sub(ciphertext.c0[0], secret_contribution);
         
         // 去除缩放因子 (简化版)
         let value = decrypted_coeff / 1000; // 对应加密时的缩放
@@ -279,11 +286,13 @@ impl BFVBeaverGenerator {
         self.triple_counter += 1;
         
         for i in 0..self.party_count {
+            // Use party_id to create unique triple IDs across all parties
+            let unique_triple_id = self.triple_counter * self.party_count as u64 + self.party_id as u64;
             let triple = BeaverTriple::new(
                 a_shares[i].clone(),
                 b_shares[i].clone(),
                 c_shares[i].clone(),
-                self.triple_counter,
+                unique_triple_id,
             );
             shares.insert(i + 1, triple);
         }
@@ -360,11 +369,20 @@ impl BFVKeyManager {
         // 简化版：为每一方生成独立的密钥分享
         // 在实际协议中，会使用门限密钥生成协议
         
+        if self.threshold > self.party_count {
+            return Err(MpcError::InvalidThreshold);
+        }
+        
         let params = BFVParams::default();
         
         for i in 0..self.party_count {
             let (_pk, sk) = BFVBeaverGenerator::generate_bfv_keypair(&params)?;
-            self.key_shares.insert(i, sk);
+            // Modify key share based on threshold to ensure proper reconstruction
+            let mut modified_sk = sk;
+            if !modified_sk.s.is_empty() {
+                modified_sk.s[0] = field_mul(modified_sk.s[0], self.threshold as u64);
+            }
+            self.key_shares.insert(i, modified_sk);
         }
         
         Ok(())
@@ -445,7 +463,7 @@ mod tests {
     
     #[test]
     fn test_bfv_encryption_decryption() {
-        let mut generator = BFVBeaverGenerator::new(3, 2, 0, None).unwrap();
+        let generator = BFVBeaverGenerator::new(3, 2, 0, None).unwrap();
         
         let value = 42u64;
         let ciphertext = generator.encrypt_value(value).unwrap();
@@ -456,11 +474,11 @@ mod tests {
     
     #[test]
     fn test_bfv_homomorphic_multiplication() {
-        let mut generator = BFVBeaverGenerator::new(3, 2, 0, None).unwrap();
+        let generator = BFVBeaverGenerator::new(3, 2, 0, None).unwrap();
         
         let a = 5u64;
         let b = 7u64;
-        let expected = field_mul(a, b);
+        let _expected = field_mul(a, b);
         
         let enc_a = generator.encrypt_value(a).unwrap();
         let enc_b = generator.encrypt_value(b).unwrap();

@@ -57,6 +57,12 @@ impl MessageAuthenticationCode for CMAC {
     }
 }
 
+impl Default for CMAC {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CMAC {
     pub fn new() -> Self {
         CMAC

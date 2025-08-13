@@ -3,7 +3,7 @@
 //! This is a simplified implementation for demonstration purposes.
 
 use super::*;
-use rand::{Rng, thread_rng};
+use rand::Rng;
 
 // BGV shares many similarities with BFV, but uses different scaling techniques
 #[derive(Debug, Clone, Serialize, Deserialize)]

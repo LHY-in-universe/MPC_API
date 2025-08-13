@@ -17,7 +17,7 @@
 //! - **随机性**: a 和 b 具有足够的熵，确保三元组的随机性
 
 use super::*;
-use crate::oblivious_transfer::ole;
+// use crate::oblivious_transfer::ole; // Unused import
 use crate::secret_sharing::{ShamirSecretSharing, SecretSharing};
 
 /// 基于 OLE 的 Beaver 三元组生成器
@@ -119,16 +119,28 @@ impl OLEBeaverGenerator {
         self.triple_counter += 1;
         
         for i in 0..self.party_count {
+            // Use party_id to adjust the triple ID for uniqueness across parties
+            let unique_triple_id = self.triple_counter * self.party_count as u64 + self.party_id as u64;
             let triple = BeaverTriple::new(
                 a_shares[i].clone(),
                 b_shares[i].clone(),
                 c_shares[i].clone(),
-                self.triple_counter,
+                unique_triple_id,
             );
             shares.insert(i + 1, triple);
         }
         
         Ok(CompleteBeaverTriple::new_with_values(shares, (a, b, c)))
+    }
+    
+    /// 获取参与方数量
+    pub fn get_party_count(&self) -> usize {
+        self.party_count
+    }
+    
+    /// 获取重构门限
+    pub fn get_threshold(&self) -> usize {
+        self.threshold
     }
 }
 
@@ -275,6 +287,9 @@ impl OLEBeaverVerifier {
         }
         
         // 3. 验证分享的完整性
+        if triple.shares.len() != self.party_count {
+            return Ok(false);
+        }
         for (party_id, beaver_share) in &triple.shares {
             if !beaver_share.is_consistent() {
                 return Ok(false);

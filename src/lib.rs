@@ -94,7 +94,7 @@ pub use protocols::*;
 pub use commitment::*;
 pub use authentication::*;
 pub use spdz::*;
-pub use zero_knowledge::*;
+// pub use zero_knowledge::*; // Unused import - zero knowledge not fully implemented
 pub use beaver_triples::*;
 pub use utils::*;
 

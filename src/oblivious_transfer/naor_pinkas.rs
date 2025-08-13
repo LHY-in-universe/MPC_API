@@ -4,6 +4,9 @@
 
 use super::*;
 
+// Type alias for complex return type
+pub type NPOTResult = (u64, Vec<u8>, Vec<u8>);
+
 #[derive(Debug, Clone)]
 pub struct NaorPinkasOT {
     pub setup: DHOTSetup,
@@ -21,7 +24,7 @@ impl NaorPinkasOT {
     }
     
     // Receiver's first message: pk_r = g^r
-    pub fn receiver_round1(&mut self, choice: ChoiceBit) -> Result<u64> {
+    pub fn receiver_round1(&mut self, _choice: ChoiceBit) -> Result<u64> {
         // Generate random receiver key
         let r = self.setup.receiver_private;
         self.pk_r = Some(self.setup.pow_mod(self.setup.generator, r));
@@ -187,7 +190,7 @@ impl BatchNaorPinkasOT {
         
         let mut results = Vec::new();
         
-        for (i, ((msg0, msg1), &choice)) in messages.iter().zip(choices.iter()).enumerate() {
+        for ((_i, (msg0, msg1)), &choice) in messages.iter().enumerate().zip(choices.iter()) {
             let result = execute_naor_pinkas_ot(msg0, msg1, choice)?;
             results.push(result);
         }
@@ -237,7 +240,7 @@ impl AdaptiveOT {
         &mut self,
         commitments: &[u64],
         message_generator: impl Fn(usize) -> (Vec<u8>, Vec<u8>),
-    ) -> Result<Vec<(u64, Vec<u8>, Vec<u8>)>> {
+    ) -> Result<Vec<NPOTResult>> {
         let mut responses = Vec::new();
         
         for (i, &commitment) in commitments.iter().enumerate() {

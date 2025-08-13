@@ -12,7 +12,7 @@ pub use poly1305::*;
 pub use gmac::*;
 pub use cmac::*;
 
-use crate::{MpcError, Result};
+// use crate::{MpcError, Result}; // Unused imports
 use serde::{Deserialize, Serialize};
 
 pub trait MessageAuthenticationCode {

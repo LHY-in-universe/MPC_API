@@ -6,6 +6,10 @@
 use super::*;
 use crate::secret_sharing::{field_add, field_mul};
 
+// Type aliases for complex types
+pub type VOLEResult = (Vec<u64>, Vec<u64>, u64, Vec<u64>);
+pub type BatchVOLEResult = Vec<VOLEResult>;
+
 #[derive(Debug, Clone)]
 pub struct VectorOLE {
     pub vector_length: usize,
@@ -128,14 +132,21 @@ impl VectorRandomOLE {
     }
     
     // Generate random VOLE: sender gets random (a,b), receiver gets random x, and a*x + b
-    pub fn generate_random_vole(&mut self, receiver_choice: ChoiceBit) -> Result<(Vec<u64>, Vec<u64>, u64, Vec<u64>)> {
+    pub fn generate_random_vole(&mut self, receiver_choice: ChoiceBit) -> Result<VOLEResult> {
         let mut sender_a = Vec::new();
         let mut sender_b = Vec::new();
         let mut receiver_results = Vec::new();
         
-        // Generate random x for receiver
+        // Use the random OT to generate secure random values
+        let (_r0, _r1, chosen) = self.random_ot.execute_random_ot(receiver_choice)?;
+        
+        // Generate random x for receiver based on the random OT output
         let mut rng = rand::thread_rng();
-        let receiver_x = rng.gen_range(0..FIELD_PRIME);
+        let receiver_x = if receiver_choice {
+            (chosen + rng.gen_range(0..FIELD_PRIME / 2)) % FIELD_PRIME
+        } else {
+            rng.gen_range(0..FIELD_PRIME)
+        };
         
         for _i in 0..self.vector_length {
             // Generate random a[i], b[i] for sender
@@ -158,7 +169,7 @@ impl VectorRandomOLE {
         &mut self, 
         batch_size: usize, 
         choices: &[ChoiceBit]
-    ) -> Result<Vec<(Vec<u64>, Vec<u64>, u64, Vec<u64>)>> {
+    ) -> Result<BatchVOLEResult> {
         if choices.len() != batch_size {
             return Err(MpcError::ProtocolError("Batch size mismatch".to_string()));
         }

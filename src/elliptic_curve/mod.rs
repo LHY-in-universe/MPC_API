@@ -9,8 +9,8 @@ pub mod scalar;
 pub mod ecdh;
 pub mod ecdsa;
 
-pub use curve25519::*;
-pub use secp256k1::*;
+// pub use curve25519::*; // Unused import
+// pub use secp256k1::*; // Unused import
 pub use point::*;
 pub use scalar::*;
 pub use ecdh::*;

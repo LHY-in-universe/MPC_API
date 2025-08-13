@@ -12,7 +12,8 @@ pub mod evaluator;
 pub mod free_xor;
 
 pub use circuit::*;
-pub use gate::*;
+// Import from where they are actually defined
+// Gate and GateType are both defined in circuit.rs but re-exported
 pub use wire::*;
 pub use garbler::*;
 pub use evaluator::*;
@@ -21,7 +22,7 @@ pub use free_xor::*;
 use crate::{MpcError, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Sha256, Digest};
-use rand::{Rng, RngCore};
+use rand::RngCore;
 
 pub type Label = [u8; 16]; // 128-bit wire labels
 pub type WireId = u32;

@@ -216,7 +216,7 @@ impl RandomOLE {
     }
     
     // Convert OLE correlation to additive shares
-    pub fn ole_to_additive_shares(&self, a: u64, b: u64, x: u64, y: u64) -> (u64, u64) {
+    pub fn ole_to_additive_shares(&self, _a: u64, _b: u64, _x: u64, y: u64) -> (u64, u64) {
         // Split y = a*x + b into additive shares
         let mut rng = rand::thread_rng();
         let share1 = rng.gen_range(0..FIELD_PRIME);
@@ -226,7 +226,7 @@ impl RandomOLE {
     }
     
     // Convert OLE correlation to XOR shares (for boolean case)
-    pub fn ole_to_xor_shares(&self, a: bool, b: bool, x: bool, y: bool) -> (bool, bool) {
+    pub fn ole_to_xor_shares(&self, _a: bool, _b: bool, _x: bool, y: bool) -> (bool, bool) {
         // Split y = (a ∧ x) ⊕ b into XOR shares
         let mut rng = rand::thread_rng();
         let share1 = rng.gen::<bool>();

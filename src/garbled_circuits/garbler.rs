@@ -1,9 +1,9 @@
 //! Garbler implementation for creating garbled circuits
 
 use super::*;
-use crate::secret_sharing::{FIELD_PRIME, field_add, field_mul};
+// use crate::secret_sharing::{FIELD_PRIME, field_add, field_mul}; // Unused imports
 use std::collections::HashMap;
-use rand::{thread_rng, RngCore};
+use rand::thread_rng;
 
 pub struct Garbler {
     pub global_offset: Label,
@@ -133,7 +133,7 @@ impl Garbler {
         })
     }
     
-    fn garble_xor_gate(&self, gate: &Gate, wire_labels: &HashMap<WireId, (Label, Label)>) -> Result<GarbledGate> {
+    fn garble_xor_gate(&self, gate: &Gate, _wire_labels: &HashMap<WireId, (Label, Label)>) -> Result<GarbledGate> {
         if gate.input_wires.len() != 2 {
             return Err(MpcError::ProtocolError("XOR gate must have exactly 2 inputs".to_string()));
         }
@@ -149,7 +149,7 @@ impl Garbler {
         })
     }
     
-    fn garble_not_gate(&self, gate: &Gate, wire_labels: &HashMap<WireId, (Label, Label)>) -> Result<GarbledGate> {
+    fn garble_not_gate(&self, gate: &Gate, _wire_labels: &HashMap<WireId, (Label, Label)>) -> Result<GarbledGate> {
         if gate.input_wires.len() != 1 {
             return Err(MpcError::ProtocolError("NOT gate must have exactly 1 input".to_string()));
         }
@@ -177,7 +177,7 @@ impl Garbler {
     fn shuffle_garbled_table(&self, table: &mut [Label]) {
         // For simplicity, we'll use a deterministic shuffle based on the labels
         // In practice, you might want a more sophisticated shuffling mechanism
-        table.sort_by(|a, b| a.cmp(b));
+        table.sort();
     }
     
     pub fn get_input_labels(&self, garbled_circuit: &GarbledCircuit, inputs: &[bool]) -> Result<Vec<Label>> {

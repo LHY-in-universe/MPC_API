@@ -3,8 +3,8 @@
 //! Implements HMAC using SHA-256 hash function
 
 use crate::{MpcError, Result};
-use crate::secret_sharing::FIELD_PRIME;
-use super::{MessageAuthenticationCode, MacTag, UnforgeableMac, SecureMac};
+// use crate::secret_sharing::FIELD_PRIME; // Unused import
+use super::{MessageAuthenticationCode, UnforgeableMac, SecureMac};
 use rand::{Rng, thread_rng};
 use sha2::{Sha256, Digest};
 use serde::{Deserialize, Serialize};
@@ -47,6 +47,12 @@ impl MessageAuthenticationCode for HMAC {
     fn verify(key: &Self::Key, message: &Self::Message, tag: &Self::Tag) -> bool {
         let computed_tag = Self::authenticate(key, message);
         Self::secure_compare(&computed_tag.tag, &tag.tag)
+    }
+}
+
+impl Default for HMAC {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

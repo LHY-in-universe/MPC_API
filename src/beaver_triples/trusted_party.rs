@@ -152,11 +152,13 @@ impl TrustedPartyBeaverGenerator {
         let mut shares = HashMap::new();
         
         for i in 0..self.party_count {
+            // Use party_id to create unique triple IDs across all parties
+            let unique_triple_id = self.triple_counter * self.party_count as u64 + self.party_id as u64;
             let triple = BeaverTriple::new(
                 a_shares[i].clone(),
                 b_shares[i].clone(), 
                 c_shares[i].clone(),
-                self.triple_counter,
+                unique_triple_id,
             );
             shares.insert(i + 1, triple);
         }
@@ -192,16 +194,24 @@ impl TrustedPartyBeaverGenerator {
     /// 
     /// 预先生成一批三元组存储在池中，以提高响应速度。
     fn fill_precomputed_pool(&mut self, count: usize) -> Result<()> {
-        let mut pool = self.precomputed_pool.lock()
-            .map_err(|_| MpcError::ProtocolError("Failed to lock precomputed pool".to_string()))?;
+        let mut triples_to_store = Vec::new();
         
+        // 生成三元组（需要可变借用来更新计数器）
         for _ in 0..count {
             let (a, b, c) = self.generate_raw_triple();
             
             if self.verify_triple_correctness(a, b, c) {
                 let triple = self.distribute_triple_shares(a, b, c)?;
-                pool.push(triple);
+                triples_to_store.push(triple);
             }
+        }
+        
+        // 将生成的三元组存储到池中
+        let mut pool = self.precomputed_pool.lock()
+            .map_err(|_| MpcError::ProtocolError("Failed to lock precomputed pool".to_string()))?;
+        
+        for triple in triples_to_store {
+            pool.push(triple);
         }
         
         Ok(())
@@ -315,9 +325,11 @@ impl BatchTrustedPartyGenerator {
         party_id: usize,
         batch_size: usize,
     ) -> Result<Self> {
-        let mut config = TrustedPartyConfig::default();
-        config.batch_size = batch_size;
-        config.pool_size = batch_size * 5; // 池大小为批量大小的5倍
+        let config = TrustedPartyConfig {
+            batch_size,
+            pool_size: batch_size * 5, // 池大小为批量大小的5倍
+            ..TrustedPartyConfig::default()
+        };
         
         let base_generator = TrustedPartyBeaverGenerator::new(
             party_count, threshold, party_id, Some(config)

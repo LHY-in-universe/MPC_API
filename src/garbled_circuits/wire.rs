@@ -157,7 +157,7 @@ impl WireState {
             if let Some(value) = self.get_wire_value(wire_id) {
                 output_values.push(value);
             } else {
-                return Err(MpcError::ProtocolError(format!("Output wire {} has no value", wire_id)));
+                return Err(MpcError::ProtocolError(format!("Output wire {wire_id} has no value")));
             }
         }
         
@@ -171,7 +171,7 @@ impl WireState {
             if let Some(label) = self.get_wire_label(wire_id) {
                 output_labels.push(label);
             } else {
-                return Err(MpcError::ProtocolError(format!("Output wire {} has no label", wire_id)));
+                return Err(MpcError::ProtocolError(format!("Output wire {wire_id} has no label")));
             }
         }
         
