@@ -41,13 +41,19 @@ impl ShamirSecretSharing {
         
         let mut result = 0u64;
         
+        // 拉格朗日插值：计算在x=0处的多项式值
         for i in 0..shares.len() {
             let mut numerator = 1u64;
             let mut denominator = 1u64;
             
+            // 计算拉格朗日基函数 L_i(0) = ∏(0-x_j)/(x_i-x_j) for j≠i
             for j in 0..shares.len() {
                 if i != j {
-                    numerator = field_mul(numerator, shares[j].x);
+                    // 分子：(0 - x_j) = (-x_j) = field_sub(0, x_j)
+                    let neg_xj = field_sub(0, shares[j].x);
+                    numerator = field_mul(numerator, neg_xj);
+                    
+                    // 分母：(x_i - x_j)
                     let diff = field_sub(shares[i].x, shares[j].x);
                     denominator = field_mul(denominator, diff);
                 }

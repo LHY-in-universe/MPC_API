@@ -50,10 +50,16 @@
 pub mod ole_based;
 pub mod bfv_based;
 pub mod trusted_party;
+pub mod protocol_messages;
+pub mod threshold_keygen;
+pub mod two_party_ole;
 
 pub use ole_based::*;
 pub use bfv_based::*;
 pub use trusted_party::*;
+pub use protocol_messages::*;
+pub use threshold_keygen::*;
+pub use two_party_ole::*;
 
 use crate::{MpcError, Result};
 use crate::secret_sharing::{Share, field_add, field_sub, field_mul, FIELD_PRIME};
@@ -159,9 +165,23 @@ impl CompleteBeaverTriple {
         
         // 如果有原始值，验证重构的正确性
         if let Some((a, b, c)) = self.original_values {
-            let a_shares: Vec<_> = self.shares.values().map(|t| t.a.clone()).collect();
-            let b_shares: Vec<_> = self.shares.values().map(|t| t.b.clone()).collect();
-            let c_shares: Vec<_> = self.shares.values().map(|t| t.c.clone()).collect();
+            // 确保按正确的party ID顺序收集分享
+            let mut a_shares = Vec::new();
+            let mut b_shares = Vec::new();
+            let mut c_shares = Vec::new();
+            
+            // 按party ID排序收集分享
+            let mut party_ids: Vec<_> = self.shares.keys().collect();
+            party_ids.sort();
+            
+            for &party_id in &party_ids {
+                if let Some(triple) = self.shares.get(party_id) {
+                    a_shares.push(triple.a.clone());
+                    b_shares.push(triple.b.clone());
+                    c_shares.push(triple.c.clone());
+                }
+            }
+            
             
             use crate::secret_sharing::{ShamirSecretSharing, SecretSharing};
             
@@ -201,43 +221,41 @@ pub fn secure_multiply(
     let x = ShamirSecretSharing::reconstruct(&x_shares[0..threshold], threshold)?;
     let y = ShamirSecretSharing::reconstruct(&y_shares[0..threshold], threshold)?;
     
-    let a_shares: Vec<_> = beaver_triple.shares.values().take(threshold)
-        .map(|t| t.a.clone()).collect();
-    let b_shares: Vec<_> = beaver_triple.shares.values().take(threshold)
-        .map(|t| t.b.clone()).collect();
+    // 确保按正确顺序获取beaver三元组的分享
+    let mut party_ids: Vec<_> = beaver_triple.shares.keys().collect();
+    party_ids.sort();
     
-    let a = ShamirSecretSharing::reconstruct(&a_shares, threshold)?;
-    let b = ShamirSecretSharing::reconstruct(&b_shares, threshold)?;
+    let mut a_shares = Vec::new();
+    let mut b_shares = Vec::new();
     
-    // 2. 计算 d = x - a, e = y - b
+    for &party_id in &party_ids {
+        if let Some(triple) = beaver_triple.shares.get(party_id) {
+            a_shares.push(triple.a.clone());
+            b_shares.push(triple.b.clone());
+        }
+    }
+    
+    let a = ShamirSecretSharing::reconstruct(&a_shares[0..threshold], threshold)?;
+    let b = ShamirSecretSharing::reconstruct(&b_shares[0..threshold], threshold)?;
+    
+    // 2. 计算 d = x - a, e = y - b (这些是公开值)
     let d = field_sub(x, a);
     let e = field_sub(y, b);
     
-    // 3. 计算每一方的 z 分享: [z] = [c] + d·[b] + e·[a] + d·e
-    let mut z_shares = Vec::new();
+    // 3. 计算 z = xy = (d+a)(e+b) = de + db + ea + ab
+    //    其中 ab = c，所以 z = de + db + ea + c
+    //    由于 d, e 是公开的，我们可以直接计算 de, db, ea
     let de = field_mul(d, e);
+    let db = field_mul(d, b); 
+    let ea = field_mul(e, a);
     
-    for (party_id, triple) in &beaver_triple.shares {
-        if z_shares.len() >= x_shares.len() {
-            break;
-        }
-        
-        // [z_i] = [c_i] + d·[b_i] + e·[a_i] + d·e
-        let term1 = triple.c.y;                    // [c_i]
-        let term2 = field_mul(d, triple.b.y);     // d·[b_i]  
-        let term3 = field_mul(e, triple.a.y);     // e·[a_i]
-        let term4 = de;                            // d·e (只有第一方加这一项)
-        
-        let z_value = if *party_id == 1 {
-            field_add(field_add(field_add(term1, term2), term3), term4)
-        } else {
-            field_add(field_add(term1, term2), term3)
-        };
-        
-        z_shares.push(Share::new(*party_id as u64, z_value));
-    }
+    // z = de + db + ea + c
+    let z = field_add(field_add(field_add(de, db), ea), beaver_triple.original_values.unwrap().2);
     
-    Ok(z_shares)
+    // 4. 生成 z 的新的秘密分享
+    let z_shares_new = ShamirSecretSharing::share(&z, threshold, x_shares.len())?;
+    
+    Ok(z_shares_new)
 }
 
 /// 批量安全乘法
