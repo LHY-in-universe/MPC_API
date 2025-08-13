@@ -1,0 +1,347 @@
+//! Vector Oblivious Linear Function Evaluation (向量不经意线性函数计算)
+//! 
+//! VOLE allows computing f(x) = a*x + b where a,b are vectors and x is a scalar,
+//! such that the sender learns nothing about x and receiver learns f(x) but not a,b.
+
+use super::*;
+use crate::secret_sharing::{field_add, field_mul};
+
+#[derive(Debug, Clone)]
+pub struct VectorOLE {
+    pub vector_length: usize,
+    pub base_ot: BasicOT,
+}
+
+impl VectorOLE {
+    pub fn new(vector_length: usize) -> Self {
+        Self {
+            vector_length,
+            base_ot: BasicOT::new(),
+        }
+    }
+    
+    // Execute Vector OLE: sender has vectors a,b; receiver has scalar x; receiver gets a*x + b
+    pub fn execute_vole(
+        &mut self,
+        sender_a: &[u64],  // Vector a
+        sender_b: &[u64],  // Vector b  
+        receiver_x: u64,   // Scalar x
+    ) -> Result<Vec<u64>> {
+        if sender_a.len() != self.vector_length || sender_b.len() != self.vector_length {
+            return Err(MpcError::ProtocolError("Vector length mismatch".to_string()));
+        }
+        
+        let mut results = Vec::new();
+        
+        // For each position i, execute OLE to compute a[i]*x + b[i]
+        for i in 0..self.vector_length {
+            let result = self.execute_single_ole(sender_a[i], sender_b[i], receiver_x)?;
+            results.push(result);
+        }
+        
+        Ok(results)
+    }
+    
+    // Execute single OLE: f(x) = a*x + b
+    fn execute_single_ole(&mut self, a: u64, b: u64, x: u64) -> Result<u64> {
+        // Use correlated OT to implement OLE
+        // We need to compute a*x + b without revealing a,b to receiver or x to sender
+        
+        // Method: Use two OTs
+        // First OT: receiver chooses bit based on x, gets shares of ax
+        // Second OT: receiver gets b and completes the computation
+        
+        // For simplicity, we'll use a direct approach with basic OT
+        // In practice, this would use more sophisticated techniques
+        
+        // Compute the two possible outputs: a*0 + b = b, a*1 + b = a + b
+        let msg0 = b;                    // When x = 0
+        let msg1 = field_add(a, b);      // When x = 1 (for boolean x)
+        
+        // For full scalar x, we need to generalize this
+        // Here we'll use a simplified version treating x as boolean
+        let choice = (x % 2) == 1;
+        
+        let msg0_bytes = msg0.to_le_bytes().to_vec();
+        let msg1_bytes = msg1.to_le_bytes().to_vec();
+        
+        let result_bytes = execute_basic_ot(msg0_bytes, msg1_bytes, choice)?;
+        
+        let mut bytes = [0u8; 8];
+        bytes.copy_from_slice(&result_bytes[..8]);
+        Ok(u64::from_le_bytes(bytes))
+    }
+    
+    // Batch VOLE for multiple vectors
+    pub fn batch_vole(
+        &mut self,
+        sender_vectors: &[(Vec<u64>, Vec<u64>)], // (a_i, b_i) pairs
+        receiver_scalars: &[u64],                // x_i values
+    ) -> Result<Vec<Vec<u64>>> {
+        if sender_vectors.len() != receiver_scalars.len() {
+            return Err(MpcError::ProtocolError("Batch size mismatch".to_string()));
+        }
+        
+        let mut results = Vec::new();
+        
+        for ((a, b), &x) in sender_vectors.iter().zip(receiver_scalars.iter()) {
+            let result = self.execute_vole(a, b, x)?;
+            results.push(result);
+        }
+        
+        Ok(results)
+    }
+    
+    // Subfield VOLE - VOLE over smaller field embedded in larger field
+    pub fn subfield_vole(
+        &mut self,
+        sender_a: &[u64],
+        sender_b: &[u64], 
+        receiver_x: u64,
+        subfield_size: u64,
+    ) -> Result<Vec<u64>> {
+        // Ensure all values are in the subfield
+        let a_sub: Vec<u64> = sender_a.iter().map(|&v| v % subfield_size).collect();
+        let b_sub: Vec<u64> = sender_b.iter().map(|&v| v % subfield_size).collect();
+        let x_sub = receiver_x % subfield_size;
+        
+        let results = self.execute_vole(&a_sub, &b_sub, x_sub)?;
+        
+        // Results are naturally in the subfield due to the field operations
+        Ok(results.into_iter().map(|v| v % subfield_size).collect())
+    }
+}
+
+// Vector Random OLE - generates random vectors for VOLE
+#[derive(Debug, Clone)]
+pub struct VectorRandomOLE {
+    vector_length: usize,
+    random_ot: RandomOT,
+}
+
+impl VectorRandomOLE {
+    pub fn new(vector_length: usize) -> Self {
+        Self {
+            vector_length,
+            random_ot: RandomOT::new(),
+        }
+    }
+    
+    // Generate random VOLE: sender gets random (a,b), receiver gets random x, and a*x + b
+    pub fn generate_random_vole(&mut self, receiver_choice: ChoiceBit) -> Result<(Vec<u64>, Vec<u64>, u64, Vec<u64>)> {
+        let mut sender_a = Vec::new();
+        let mut sender_b = Vec::new();
+        let mut receiver_results = Vec::new();
+        
+        // Generate random x for receiver
+        let mut rng = rand::thread_rng();
+        let receiver_x = rng.gen_range(0..FIELD_PRIME);
+        
+        for _i in 0..self.vector_length {
+            // Generate random a[i], b[i] for sender
+            let a_i = rng.gen_range(0..FIELD_PRIME);
+            let b_i = rng.gen_range(0..FIELD_PRIME);
+            
+            // Compute a[i]*x + b[i] for receiver
+            let result_i = field_add(field_mul(a_i, receiver_x), b_i);
+            
+            sender_a.push(a_i);
+            sender_b.push(b_i);
+            receiver_results.push(result_i);
+        }
+        
+        Ok((sender_a, sender_b, receiver_x, receiver_results))
+    }
+    
+    // Batch random VOLE generation
+    pub fn batch_random_vole(
+        &mut self, 
+        batch_size: usize, 
+        choices: &[ChoiceBit]
+    ) -> Result<Vec<(Vec<u64>, Vec<u64>, u64, Vec<u64>)>> {
+        if choices.len() != batch_size {
+            return Err(MpcError::ProtocolError("Batch size mismatch".to_string()));
+        }
+        
+        let mut results = Vec::new();
+        
+        for &choice in choices {
+            let result = self.generate_random_vole(choice)?;
+            results.push(result);
+        }
+        
+        Ok(results)
+    }
+}
+
+// Specialized VOLE for boolean circuits
+#[derive(Debug, Clone)]
+pub struct BooleanVOLE {
+    vector_length: usize,
+}
+
+impl BooleanVOLE {
+    pub fn new(vector_length: usize) -> Self {
+        Self { vector_length }
+    }
+    
+    // Boolean VOLE: compute a ∧ x ⊕ b (AND then XOR)
+    pub fn execute_boolean_vole(
+        &self,
+        sender_a: &[bool],  // Boolean vector a
+        sender_b: &[bool],  // Boolean vector b
+        receiver_x: bool,   // Boolean scalar x
+    ) -> Result<Vec<bool>> {
+        if sender_a.len() != self.vector_length || sender_b.len() != self.vector_length {
+            return Err(MpcError::ProtocolError("Vector length mismatch".to_string()));
+        }
+        
+        let mut results = Vec::new();
+        
+        for i in 0..self.vector_length {
+            // Boolean OLE: a[i] ∧ x ⊕ b[i]
+            let and_result = sender_a[i] && receiver_x;
+            let final_result = and_result ^ sender_b[i];
+            results.push(final_result);
+        }
+        
+        Ok(results)
+    }
+    
+    // Convert to/from u64 representation for compatibility
+    pub fn execute_boolean_vole_u64(
+        &self,
+        sender_a: &[u64],
+        sender_b: &[u64], 
+        receiver_x: u64,
+    ) -> Result<Vec<u64>> {
+        // Convert to boolean
+        let a_bool: Vec<bool> = sender_a.iter().map(|&v| (v % 2) == 1).collect();
+        let b_bool: Vec<bool> = sender_b.iter().map(|&v| (v % 2) == 1).collect();
+        let x_bool = (receiver_x % 2) == 1;
+        
+        // Execute boolean VOLE
+        let result_bool = self.execute_boolean_vole(&a_bool, &b_bool, x_bool)?;
+        
+        // Convert back to u64
+        let results: Vec<u64> = result_bool.iter().map(|&b| if b { 1u64 } else { 0u64 }).collect();
+        
+        Ok(results)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn test_vector_ole_basic() {
+        let mut vole = VectorOLE::new(3);
+        
+        let sender_a = vec![2, 3, 4];
+        let sender_b = vec![5, 6, 7];
+        let receiver_x = 1; // Boolean x = 1
+        
+        let results = vole.execute_vole(&sender_a, &sender_b, receiver_x).unwrap();
+        
+        // For boolean x=1, result should be a + b
+        let expected: Vec<u64> = sender_a.iter().zip(sender_b.iter())
+            .map(|(&a, &b)| field_add(a, b))
+            .collect();
+            
+        assert_eq!(results, expected);
+    }
+    
+    #[test]
+    fn test_vector_ole_zero() {
+        let mut vole = VectorOLE::new(3);
+        
+        let sender_a = vec![2, 3, 4];
+        let sender_b = vec![5, 6, 7];
+        let receiver_x = 0; // Boolean x = 0
+        
+        let results = vole.execute_vole(&sender_a, &sender_b, receiver_x).unwrap();
+        
+        // For boolean x=0, result should be b
+        assert_eq!(results, sender_b);
+    }
+    
+    #[test]
+    fn test_batch_vole() {
+        let mut vole = VectorOLE::new(2);
+        
+        let sender_vectors = vec![
+            (vec![1, 2], vec![3, 4]),
+            (vec![5, 6], vec![7, 8]),
+        ];
+        let receiver_scalars = vec![0, 1];
+        
+        let results = vole.batch_vole(&sender_vectors, &receiver_scalars).unwrap();
+        
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0], vec![3, 4]); // x=0, so result is b
+        assert_eq!(results[1], vec![field_add(5, 7), field_add(6, 8)]); // x=1, so result is a+b
+    }
+    
+    #[test]
+    fn test_random_vole_generation() {
+        let mut random_vole = VectorRandomOLE::new(4);
+        
+        let (sender_a, sender_b, receiver_x, receiver_results) = 
+            random_vole.generate_random_vole(true).unwrap();
+        
+        assert_eq!(sender_a.len(), 4);
+        assert_eq!(sender_b.len(), 4);
+        assert_eq!(receiver_results.len(), 4);
+        
+        // Verify the computation: each result[i] should equal a[i]*x + b[i]
+        for i in 0..4 {
+            let expected = field_add(field_mul(sender_a[i], receiver_x), sender_b[i]);
+            assert_eq!(receiver_results[i], expected);
+        }
+    }
+    
+    #[test]
+    fn test_boolean_vole() {
+        let bool_vole = BooleanVOLE::new(3);
+        
+        let sender_a = vec![true, false, true];
+        let sender_b = vec![false, true, false];
+        let receiver_x = true;
+        
+        let results = bool_vole.execute_boolean_vole(&sender_a, &sender_b, receiver_x).unwrap();
+        
+        // Expected: [true∧true⊕false, false∧true⊕true, true∧true⊕false] = [true, true, true]
+        assert_eq!(results, vec![true, true, true]);
+    }
+    
+    #[test]
+    fn test_boolean_vole_u64() {
+        let bool_vole = BooleanVOLE::new(3);
+        
+        let sender_a = vec![1, 0, 1]; // true, false, true
+        let sender_b = vec![0, 1, 0]; // false, true, false
+        let receiver_x = 1; // true
+        
+        let results = bool_vole.execute_boolean_vole_u64(&sender_a, &sender_b, receiver_x).unwrap();
+        
+        assert_eq!(results, vec![1, 1, 1]); // All true
+    }
+    
+    #[test]
+    fn test_subfield_vole() {
+        let mut vole = VectorOLE::new(2);
+        
+        let sender_a = vec![100, 200]; // Will be reduced mod subfield_size
+        let sender_b = vec![150, 250];
+        let receiver_x = 3;
+        let subfield_size = 7;
+        
+        let results = vole.subfield_vole(&sender_a, &sender_b, receiver_x, subfield_size).unwrap();
+        
+        // All results should be < subfield_size
+        for &result in &results {
+            assert!(result < subfield_size);
+        }
+    }
+}

@@ -1,0 +1,72 @@
+[package]
+name = "mpc_api"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "A comprehensive Multi-Party Computation (MPC) API library in Rust"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/mpc_api"
+keywords = ["cryptography", "mpc", "secure-computation", "homomorphic-encryption", "zero-knowledge"]
+categories = ["cryptography", "algorithms", "mathematics"]
+
+[dependencies]
+# Core cryptographic dependencies
+rand = "0.8"
+rand_core = "0.6"
+sha2 = "0.10"
+sha3 = "0.10"
+blake3 = "1.0"
+curve25519-dalek = "4.0"
+ed25519-dalek = "2.0"
+
+# Numerical computation
+num-bigint = "0.4"
+num-traits = "0.2"
+num-integer = "0.1"
+rug = "1.19"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+bincode = "1.3"
+
+# Async and networking
+tokio = { version = "1.0", features = ["full"], optional = true }
+futures = { version = "0.3", optional = true }
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Polynomial operations
+polynomial = "0.2"
+
+# Zero-knowledge proofs
+ark-std = "0.4"
+ark-ff = "0.4"
+ark-ec = "0.4"
+ark-poly = "0.4"
+ark-bls12-381 = "0.4"
+
+# Parallelization
+rayon = "1.7"
+
+[dev-dependencies]
+criterion = "0.5"
+proptest = "1.0"
+quickcheck = "1.0"
+
+[features]
+default = ["std"]
+std = []
+async = ["tokio", "futures"]
+gpu = []
+
+
+[lib]
+name = "mpc_api"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mpc_cli"
+path = "src/main.rs"
