@@ -129,7 +129,7 @@ pub fn bfv_encryption_example() -> Result<()> {
     let threshold = 2;
     let party_id = 0;
     
-    let mut bfv_generator = BFVBeaverGenerator::new(party_count, threshold, party_id, None)?;
+    let bfv_generator = BFVBeaverGenerator::new(party_count, threshold, party_id, None)?;
     
     // 1. 测试基本加密解密
     let original_value = 42u64;
@@ -329,7 +329,7 @@ pub fn bfv_performance_comparison_example() -> Result<()> {
         
         // 测量生成时间
         let start = Instant::now();
-        let mut generator = BFVBeaverGenerator::new(party_count, threshold, party_id, Some(params))?;
+        let mut generator = BFVBeaverGenerator::new(party_count, threshold, party_id, Some(params.clone()))?;
         let _triple = generator.generate_single()?;
         let duration = start.elapsed();
         

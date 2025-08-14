@@ -114,7 +114,6 @@ pub fn merkle_tree_demo() -> Result<()> {
     let is_included = MerkleTree::verify_proof(
         root_hash,
         &data_items[prove_index],
-        prove_index,
         &proof
     )?;
     
@@ -124,7 +123,7 @@ pub fn merkle_tree_demo() -> Result<()> {
     // 验证所有数据项
     for i in 0..data_items.len() {
         let proof = merkle_tree.generate_proof(i)?;
-        let is_valid = MerkleTree::verify_proof(root_hash, &data_items[i], i, &proof)?;
+        let is_valid = MerkleTree::verify_proof(root_hash, &data_items[i], &proof)?;
         println!("  项目 {}: {}", i, if is_valid { "✓" } else { "✗" });
         assert!(is_valid);
     }
@@ -137,30 +136,30 @@ pub fn merkle_tree_demo() -> Result<()> {
 pub fn hmac_demo() -> Result<()> {
     println!("=== HMAC 消息认证码演示 ===");
     
-    let secret_key = b"this_is_a_secret_key_for_testing";
-    let message = b"Important message that needs authentication";
+    let key = HMAC::generate_key();
+    let message = b"Important message that needs authentication".to_vec();
     
-    println!("密钥长度: {} 字节", secret_key.len());
-    println!("消息: {}", String::from_utf8_lossy(message));
+    println!("密钥生成完成");
+    println!("消息: {}", String::from_utf8_lossy(&message));
     
     // 生成 HMAC
-    let hmac_result = HMAC::authenticate(secret_key, message)?;
-    println!("HMAC (前8字节): {:02x?}", &hmac_result[0..8]);
+    let hmac_result = HMAC::authenticate(&key, &message);
+    println!("HMAC (前8字节): {:02x?}", &hmac_result.tag[0..8]);
     
     // 验证 HMAC
-    let is_valid = HMAC::verify(secret_key, message, &hmac_result)?;
+    let is_valid = HMAC::verify(&key, &message, &hmac_result);
     println!("HMAC 验证: {}", if is_valid { "有效" } else { "无效" });
     assert!(is_valid);
     
     // 检测篡改
-    let tampered_message = b"Important message that has been TAMPERED";
-    let is_tampered_valid = HMAC::verify(secret_key, tampered_message, &hmac_result)?;
+    let tampered_message = b"Important message that has been TAMPERED".to_vec();
+    let is_tampered_valid = HMAC::verify(&key, &tampered_message, &hmac_result);
     println!("篡改检测: {}", if is_tampered_valid { "未检测到" } else { "检测到篡改" });
     assert!(!is_tampered_valid);
     
     // 检测错误密钥
-    let wrong_key = b"wrong_key_for_testing_authentication";
-    let is_wrong_key_valid = HMAC::verify(wrong_key, message, &hmac_result)?;
+    let wrong_key = HMAC::generate_key();
+    let is_wrong_key_valid = HMAC::verify(&wrong_key, &message, &hmac_result);
     println!("错误密钥检测: {}", if is_wrong_key_valid { "未检测到" } else { "检测到错误密钥" });
     assert!(!is_wrong_key_valid);
     
@@ -217,44 +216,33 @@ pub fn field_operations_demo() -> Result<()> {
     Ok(())
 }
 
-/// 6. 椭圆曲线密码学演示
-pub fn elliptic_curve_demo() -> Result<()> {
-    println!("=== 椭圆曲线密码学演示 ===");
+/// 6. 简化的密钥演示（椭圆曲线功能尚未完整实现）
+pub fn simple_key_demo() -> Result<()> {
+    println!("=== 简化密钥演示 ===");
     
-    // 生成密钥对
-    let key_pair = EllipticCurveKeyPair::generate()?;
-    println!("椭圆曲线密钥对生成完成");
+    // 生成HMAC密钥对
+    let key1 = HMAC::generate_key();
+    let key2 = HMAC::generate_key();
     
-    // 消息签名
-    let message = b"This is a message to be signed";
-    println!("待签名消息: {}", String::from_utf8_lossy(message));
+    println!("HMAC密钥生成完成");
+    println!("密钥1不等于密钥2: {}", key1.key != key2.key);
     
-    let signature = key_pair.sign(message)?;
-    println!("数字签名生成完成");
+    // 密钥派生演示
+    let master_key = b"master_secret_key_for_derivation";
+    let info = b"application_specific_context";
+    let derived_key = HMAC::derive_key(master_key, info, 32);
     
-    // 验证签名
-    let is_valid = key_pair.verify(message, &signature)?;
-    println!("签名验证: {}", if is_valid { "有效" } else { "无效" });
-    assert!(is_valid);
+    println!("密钥派生完成，派生密钥长度: {} 字节", derived_key.len());
     
-    // 验证错误消息（应该失败）
-    let wrong_message = b"This is a DIFFERENT message";
-    let is_wrong_valid = key_pair.verify(wrong_message, &signature)?;
-    println!("错误消息验证: {}", if is_wrong_valid { "有效" } else { "无效" });
-    assert!(!is_wrong_valid);
+    // 密钥拉伸演示
+    let password = b"user_password";
+    let salt = b"random_salt_12345";
+    let iterations = 1000;
+    let _stretched_key = HMAC::stretch_key(password, salt, iterations);
     
-    // ECDH 密钥交换演示
-    let alice_keys = EllipticCurveKeyPair::generate()?;
-    let bob_keys = EllipticCurveKeyPair::generate()?;
+    println!("PBKDF2风格密钥拉伸完成，迭代次数: {}", iterations);
     
-    let alice_shared = alice_keys.ecdh(&bob_keys.public_key)?;
-    let bob_shared = bob_keys.ecdh(&alice_keys.public_key)?;
-    
-    println!("ECDH 密钥交换: {} 字节", alice_shared.len());
-    println!("密钥一致性: {}", if alice_shared == bob_shared { "一致" } else { "不一致" });
-    assert_eq!(alice_shared, bob_shared);
-    
-    println!("✓ 椭圆曲线密码学演示完成\n");
+    println!("✓ 简化密钥演示完成\n");
     Ok(())
 }
 
@@ -267,7 +255,7 @@ pub fn run_simple_api_demos() -> Result<()> {
     merkle_tree_demo()?;
     hmac_demo()?;
     field_operations_demo()?;
-    elliptic_curve_demo()?;
+    simple_key_demo()?;
     
     println!("🎉 === 所有简单 API 演示完成 ===");
     println!("📝 演示总结:");
@@ -276,7 +264,7 @@ pub fn run_simple_api_demos() -> Result<()> {
     println!("  ✓ Merkle 树 - 高效的数据完整性证明");
     println!("  ✓ HMAC - 消息认证码和完整性验证");
     println!("  ✓ 有限域运算 - 密码学计算的数学基础");
-    println!("  ✓ 椭圆曲线密码学 - 数字签名和密钥交换");
+    println!("  ✓ 简化密钥演示 - HMAC密钥生成和派生");
     println!("\n这些示例展示了 MPC API 中实际可用的基础密码学功能。");
     
     Ok(())
@@ -312,8 +300,8 @@ mod tests {
     }
     
     #[test]
-    fn test_elliptic_curve_demo() {
-        elliptic_curve_demo().unwrap();
+    fn test_simple_key_demo() {
+        simple_key_demo().unwrap();
     }
 }
 

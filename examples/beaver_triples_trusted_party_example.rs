@@ -167,7 +167,7 @@ pub fn high_performance_batch_example() -> Result<()> {
         
         // 验证生成的三元组
         let valid_count = triples.iter()
-            .map(|t| batch_generator.base_generator.verify_triple(t).unwrap_or(false))
+            .map(|t| t.verify(2).unwrap_or(false))
             .filter(|&x| x)
             .count();
             

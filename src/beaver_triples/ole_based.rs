@@ -119,8 +119,8 @@ impl OLEBeaverGenerator {
         self.triple_counter += 1;
         
         for i in 0..self.party_count {
-            // Use party_id to adjust the triple ID for uniqueness across parties
-            let unique_triple_id = self.triple_counter * self.party_count as u64 + self.party_id as u64;
+            // Use triple counter and party index to create unique IDs
+            let unique_triple_id = self.triple_counter * 1000 + (i + 1) as u64;
             let triple = BeaverTriple::new(
                 a_shares[i].clone(),
                 b_shares[i].clone(),

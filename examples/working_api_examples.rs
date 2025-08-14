@@ -3,7 +3,11 @@
 //! 本文档展示了当前MPC API中实际可用的组件使用方法，
 //! 这些示例都是可以编译和运行的。
 
-use mpc_api::{*, Result};
+use mpc_api::{
+    secret_sharing::{ShamirSecretSharing, SecretSharing, AdditiveSecretSharing, AdditiveSecretSharingScheme, field_add, field_mul, field_sub, field_inv, FIELD_PRIME},
+    beaver_triples::{TrustedPartyBeaverGenerator, BeaverTripleGenerator, secure_multiply, verify_triple_batch},
+    Result
+};
 
 /// 1. 秘密分享实际使用示例
 pub mod secret_sharing_examples {
@@ -11,6 +15,8 @@ pub mod secret_sharing_examples {
     
     /// Shamir 秘密分享完整示例
     pub fn complete_shamir_example() -> Result<()> {
+        use mpc_api::secret_sharing::AdditiveSecretSharing;
+        
         println!("=== 1. Shamir 秘密分享完整示例 ===");
         
         // 步骤1: 设置参数
@@ -96,19 +102,20 @@ pub mod secret_sharing_examples {
         println!("参与方数: {}", parties);
         
         // 加法分享
-        let shares = AdditiveSecretSharing::share(&secret, 2, parties)?;
+        let scheme = AdditiveSecretSharingScheme::new();
+        let shares = scheme.share_additive(&secret, parties)?;
         
         println!("加法分享结果:");
         let mut manual_sum = 0u64;
         for (i, share) in shares.iter().enumerate() {
-            println!("  方 {}: {}", i, share.y);
-            manual_sum = field_add(manual_sum, share.y);
+            println!("  方 {}: {}", i, share.value);
+            manual_sum = field_add(manual_sum, share.value);
         }
         
         println!("手动验证和: {}", manual_sum);
         
         // 重构
-        let reconstructed = AdditiveSecretSharing::reconstruct(&shares, 2)?;
+        let reconstructed = scheme.reconstruct_additive(&shares)?;
         println!("重构结果: {}", reconstructed);
         
         assert_eq!(secret, reconstructed);

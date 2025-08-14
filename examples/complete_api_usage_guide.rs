@@ -12,7 +12,14 @@
 //! 9. Beaver 三元组 (Beaver Triples)
 //! 10. 零知识证明 (Zero-Knowledge Proofs)
 
-use mpc_api::{*, Result};
+use mpc_api::{
+    secret_sharing::{ShamirSecretSharing, SecretSharing, AdditiveSecretSharingScheme, field_add, field_mul},
+    beaver_triples::{TrustedPartyBeaverGenerator, BeaverTripleGenerator, secure_multiply},
+    commitment::{HashCommitment, MerkleTree, CommitmentScheme},
+    authentication::{HMAC, MessageAuthenticationCode},
+    garbled_circuits::{GarbledCircuit, Garbler, Evaluator},
+    Result,
+};
 
 /// 1. 秘密分享使用指南
 pub mod secret_sharing_guide {
@@ -108,16 +115,17 @@ pub mod secret_sharing_guide {
         let parties = 3;
         
         // 加法分享：每方持有一个随机值，和为秘密
-        let shares = AdditiveSecretSharing::share(&secret, 2, parties)?;
+        let scheme = AdditiveSecretSharingScheme::new();
+        let shares = scheme.share_additive(&secret, parties)?;
         
         println!("秘密: {}", secret);
         println!("加法分享:");
         for (i, share) in shares.iter().enumerate() {
-            println!("  参与方 {}: {}", i, share.y);
+            println!("  参与方 {}: {}", i, share.value);
         }
         
         // 重构：将所有分享相加
-        let reconstructed = AdditiveSecretSharing::reconstruct(&shares, 2)?;
+        let reconstructed = scheme.reconstruct_additive(&shares)?;
         
         println!("重构结果: {}", reconstructed);
         assert_eq!(secret, reconstructed);

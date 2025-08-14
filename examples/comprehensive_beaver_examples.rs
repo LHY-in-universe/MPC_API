@@ -10,7 +10,7 @@
 use std::time::Instant;
 use mpc_api::{
     beaver_triples::*,
-    secret_sharing::{ShamirSecretSharing, SecretSharing, field_mul, field_add, FIELD_PRIME},
+    secret_sharing::{ShamirSecretSharing, SecretSharing, field_mul, field_add},
     Result,
 };
 

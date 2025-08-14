@@ -6,7 +6,7 @@
 use mpc_api::{
     beaver_triples::{OLEBeaverGenerator, BeaverTripleGenerator, secure_multiply, batch_secure_multiply},
     secret_sharing::{ShamirSecretSharing, SecretSharing, field_mul, field_add},
-    MpcError, Result,
+    Result,
 };
 
 /// 基本的 OLE Beaver 三元组生成和使用示例
