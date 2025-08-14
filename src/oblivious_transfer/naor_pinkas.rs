@@ -12,6 +12,7 @@ pub struct NaorPinkasOT {
     pub setup: DHOTSetup,
     pub pk_r: Option<u64>,  // Receiver's public key
     pub pk_s: Option<u64>,  // Sender's public key
+    pub receiver_choice: Option<ChoiceBit>, // Receiver's choice
 }
 
 impl NaorPinkasOT {
@@ -20,21 +21,22 @@ impl NaorPinkasOT {
             setup: DHOTSetup::new(),
             pk_r: None,
             pk_s: None,
+            receiver_choice: None,
         }
     }
     
     // Receiver's first message: pk_r = g^r
-    pub fn receiver_round1(&mut self, _choice: ChoiceBit) -> Result<u64> {
+    pub fn receiver_round1(&mut self, choice: ChoiceBit) -> Result<u64> {
+        self.receiver_choice = Some(choice);
+        
         // Generate random receiver key
         let r = self.setup.receiver_private;
-        self.pk_r = Some(self.setup.pow_mod(self.setup.generator, r));
+        let base_pk = self.setup.pow_mod(self.setup.generator, r);
+        self.pk_r = Some(base_pk);
         
-        // If choice = 0, send pk_r = g^r
-        // If choice = 1, send pk_r = h * g^r where h is sender's public key
-        let pk_r = self.pk_r.unwrap();
-        
-        // For now, just send g^r (we'll modify based on sender's h later)
-        Ok(pk_r)
+        // In the Naor-Pinkas protocol, the receiver always sends g^r
+        // The choice affects which message they can decrypt, not what they send
+        Ok(base_pk)
     }
     
     // Sender's response: Generate h = g^s and compute OT messages
@@ -68,25 +70,26 @@ impl NaorPinkasOT {
     // Receiver's final step: Decrypt the chosen message
     pub fn receiver_round2(&self, h: u64, choice: ChoiceBit, enc_msg0: &[u8], enc_msg1: &[u8]) -> Result<Vec<u8>> {
         let r = self.setup.receiver_private;
+        let pk_r = self.pk_r.unwrap();
         
         // Compute the decryption key based on choice
         let k = if choice {
-            // choice = 1: k = h^r = (g^s)^r = g^(sr)
-            self.setup.pow_mod(h, r)
-        } else {
-            // choice = 0: We need to recompute our public key correctly
-            // pk_r should have been g^r for choice 0, h * g^r for choice 1
-            // Since we sent g^r in round1, we compute k = (g^r)^s / h^r for choice 0
-            let gr_to_s = self.setup.pow_mod(self.pk_r.unwrap(), self.setup.sender_private);
+            // For choice = 1: k = (pk_r / h)^r = ((g^r / g^s))^r 
+            // But we need to match what sender computed: k1 = (pk_r / h)^s
+            // So receiver computes: (h / g^r)^r but this gets complicated...
+            // Let's use a simpler approach: k = h^r / pk_r
             let hr = self.setup.pow_mod(h, r);
-            let hr_inv = self.mod_inverse(hr)?;
-            field_mul(gr_to_s, hr_inv)
+            let pk_r_inv = self.mod_inverse(pk_r)?;
+            field_mul(hr, pk_r_inv)
+        } else {
+            // For choice = 0: k = h^r = (g^s)^r = g^(rs) 
+            self.setup.pow_mod(h, r)
         };
         
         // Derive decryption key
         let key = self.derive_key(k);
         
-        // Decrypt the appropriate message
+        // Decrypt the appropriate message based on choice
         let decrypted = if choice {
             self.decrypt(enc_msg1, &key)
         } else {

@@ -236,48 +236,4 @@ impl FullyHomomorphic for BFV {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    #[test]
-    fn test_bfv_keygen() {
-        let result = BFV::keygen();
-        assert!(result.is_ok());
-        
-        let (pk, sk) = result.unwrap();
-        assert_eq!(pk.n, BFV::DEFAULT_N);
-        assert_eq!(pk.q, BFV::DEFAULT_Q);
-        assert_eq!(pk.t, BFV::DEFAULT_T);
-        assert_eq!(sk.n, pk.n);
-    }
-    
-    #[test]
-    fn test_bfv_encrypt_decrypt() {
-        let (pk, sk) = BFV::keygen().unwrap();
-        let message = 5u64;
-        
-        let ciphertext = BFV::encrypt(&pk, &message).unwrap();
-        let decrypted = BFV::decrypt(&sk, &ciphertext).unwrap();
-        
-        // Due to noise, exact equality might not hold
-        // In practice, we'd check if decrypted is close to message
-        assert!(decrypted < pk.t);
-    }
-    
-    #[test]
-    fn test_bfv_homomorphic_addition() {
-        let (pk, sk) = BFV::keygen().unwrap();
-        let m1 = 3u64;
-        let m2 = 4u64;
-        
-        let c1 = BFV::encrypt(&pk, &m1).unwrap();
-        let c2 = BFV::encrypt(&pk, &m2).unwrap();
-        
-        let c_sum = BFV::add_ciphertexts(&pk, &c1, &c2).unwrap();
-        let decrypted_sum = BFV::decrypt(&sk, &c_sum).unwrap();
-        
-        // Check if result is reasonable (noise might affect exact equality)
-        assert!(decrypted_sum < pk.t);
-    }
-}
+// Tests moved to tests/homomorphic_encryption_tests.rs

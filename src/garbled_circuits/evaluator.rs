@@ -29,11 +29,8 @@ impl Evaluator {
     
     fn evaluate_gate(&mut self, gate: &GarbledGate, garbled_circuit: &GarbledCircuit) -> Result<()> {
         match gate.gate_type {
-            GateType::And | GateType::Or => {
+            GateType::And | GateType::Or | GateType::Xor => {
                 self.evaluate_table_gate(gate, garbled_circuit)
-            }
-            GateType::Xor => {
-                self.evaluate_xor_gate(gate)
             }
             GateType::Not => {
                 self.evaluate_not_gate(gate, garbled_circuit)
@@ -77,22 +74,6 @@ impl Evaluator {
         Err(MpcError::ProtocolError("Failed to decrypt garbled table entry".to_string()))
     }
     
-    fn evaluate_xor_gate(&mut self, gate: &GarbledGate) -> Result<()> {
-        if gate.input_wires.len() != 2 {
-            return Err(MpcError::ProtocolError("XOR gate must have exactly 2 inputs".to_string()));
-        }
-        
-        // Free XOR: output_label = input1_label XOR input2_label
-        let input1_label = self.wire_state.get_wire_label(gate.input_wires[0])
-            .ok_or_else(|| MpcError::ProtocolError("Missing input label".to_string()))?;
-        let input2_label = self.wire_state.get_wire_label(gate.input_wires[1])
-            .ok_or_else(|| MpcError::ProtocolError("Missing input label".to_string()))?;
-        
-        let output_label = xor_labels(&input1_label, &input2_label);
-        self.wire_state.set_wire_label(gate.output_wire, output_label);
-        
-        Ok(())
-    }
     
     fn evaluate_not_gate(&mut self, gate: &GarbledGate, garbled_circuit: &GarbledCircuit) -> Result<()> {
         if gate.input_wires.len() != 1 {

@@ -2,7 +2,7 @@
 //! 
 //! 包含所有示例中的测试代码
 
-use mpc_api::{*, Result};
+use mpc_api::*;
 
 // ===== Beaver Triples Trusted Party Example Tests =====
 
@@ -134,8 +134,7 @@ fn test_trusted_party_audit() {
 #[test]
 fn test_multi_party_collaboration() {
     use mpc_api::{
-        beaver_triples::TrustedPartyBeaverGenerator,
-        secret_sharing::{ShamirSecretSharing, SecretSharing, field_add, field_mul},
+        secret_sharing::{field_add, field_mul},
         Result,
     };
 
@@ -556,7 +555,7 @@ fn test_private_auction_example() {
 
 #[test]
 fn test_basic_field_operations() {
-    use mpc_api::{secret_sharing::{field_add, field_mul, field_sub, field_inv, FIELD_PRIME}, Result};
+    use mpc_api::{secret_sharing::{field_add, field_mul, field_sub, field_inv}, Result};
 
     fn basic_field_operations() -> Result<()> {
         let a = 12345678901234567u64;
@@ -616,7 +615,7 @@ fn test_large_number_operations() {
 #[test]
 fn test_secret_sharing_guide() {
     use mpc_api::{
-        secret_sharing::{ShamirSecretSharing, SecretSharing, AdditiveSecretSharingScheme, AdditiveSecretSharing, field_add, field_mul},
+        secret_sharing::{ShamirSecretSharing, SecretSharing, AdditiveSecretSharingScheme, AdditiveSecretSharing},
         Result,
     };
 

@@ -159,9 +159,27 @@ impl BooleanCorrelatedOT {
     }
     
     pub fn execute_boolean_ot(&mut self, bit: bool, choice: ChoiceBit) -> Result<bool> {
-        let base_value = if bit { 1u64 } else { 0u64 };
-        let result = self.inner.execute_correlated_ot(base_value, choice)?;
-        Ok(result != 0)
+        let bit_value = if bit { 1u64 } else { 0u64 };
+        
+        // For boolean OT, we want XOR logic: sender has (b, b⊕1) messages
+        let msg0 = bit_value;
+        let msg1 = bit_value ^ 1; // XOR with 1
+        
+        // Use basic OT directly for boolean values
+        let msg0_bytes = msg0.to_le_bytes().to_vec();
+        let msg1_bytes = msg1.to_le_bytes().to_vec();
+        
+        let result_bytes = execute_basic_ot(msg0_bytes, msg1_bytes, choice)?;
+        
+        // Convert back to bool
+        if result_bytes.len() >= 8 {
+            let mut bytes = [0u8; 8];
+            bytes.copy_from_slice(&result_bytes[..8]);
+            let result = u64::from_le_bytes(bytes);
+            Ok(result != 0)
+        } else {
+            Err(MpcError::ProtocolError("Invalid result length".to_string()))
+        }
     }
     
     // Generate XOR shares: (r, b ⊕ r) where b is the secret bit

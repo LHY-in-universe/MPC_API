@@ -9,6 +9,7 @@ pub struct BasicOT {
     pub setup: DHOTSetup,
     pub sender_messages: Option<(OTMessage, OTMessage)>,
     pub receiver_choice: Option<ChoiceBit>,
+    sender_public_key: Option<u64>,
 }
 
 impl BasicOT {
@@ -17,6 +18,7 @@ impl BasicOT {
             setup: DHOTSetup::new(),
             sender_messages: None,
             receiver_choice: None,
+            sender_public_key: None,
         }
     }
     
@@ -30,6 +32,7 @@ impl BasicOT {
     
     pub fn receiver_phase1(&mut self, choice: ChoiceBit, sender_public: u64) -> Result<u64> {
         self.receiver_choice = Some(choice);
+        self.sender_public_key = Some(sender_public);
         
         // Receiver computes either g^b or (g^a * g^b) based on choice
         let receiver_private_exp = self.setup.pow_mod(self.setup.generator, self.setup.receiver_private);
@@ -75,10 +78,12 @@ impl BasicOT {
     pub fn receiver_phase2(&self, encrypted_messages: (OTMessage, OTMessage)) -> Result<OTMessage> {
         let choice = self.receiver_choice
             .ok_or_else(|| MpcError::ProtocolError("Receiver choice not set".to_string()))?;
+        let sender_public = self.sender_public_key
+            .ok_or_else(|| MpcError::ProtocolError("Sender public key not stored".to_string()))?;
         
-        // Receiver can only decrypt the message corresponding to their choice
-        let shared_secret = self.setup.pow_mod(self.setup.generator, 
-            field_mul(self.setup.sender_private, self.setup.receiver_private));
+        // Receiver computes the shared secret g^(ab)
+        // The receiver knows their private key b, and has the sender's public key g^a
+        let shared_secret = self.setup.pow_mod(sender_public, self.setup.receiver_private);
         
         let key = hash_to_bytes(shared_secret);
         

@@ -133,19 +133,44 @@ impl Garbler {
         })
     }
     
-    fn garble_xor_gate(&self, gate: &Gate, _wire_labels: &HashMap<WireId, (Label, Label)>) -> Result<GarbledGate> {
+    fn garble_xor_gate(&self, gate: &Gate, wire_labels: &HashMap<WireId, (Label, Label)>) -> Result<GarbledGate> {
         if gate.input_wires.len() != 2 {
             return Err(MpcError::ProtocolError("XOR gate must have exactly 2 inputs".to_string()));
         }
         
-        // XOR gates can use the free-XOR optimization - no garbled table needed
-        // Output label = input1_label XOR input2_label
+        let (a0, a1) = wire_labels[&gate.input_wires[0]];
+        let (b0, b1) = wire_labels[&gate.input_wires[1]];
+        let (c0, c1) = wire_labels[&gate.output_wire];
+        
+        // Create garbled table for XOR gate
+        // Truth table: 00->0, 01->1, 10->1, 11->0
+        let mut garbled_table = Vec::new();
+        
+        // Entry for (0,0) -> 0
+        let entry_00 = self.encrypt_label(&[a0, b0], &c0);
+        garbled_table.push(entry_00);
+        
+        // Entry for (0,1) -> 1
+        let entry_01 = self.encrypt_label(&[a0, b1], &c1);
+        garbled_table.push(entry_01);
+        
+        // Entry for (1,0) -> 1
+        let entry_10 = self.encrypt_label(&[a1, b0], &c1);
+        garbled_table.push(entry_10);
+        
+        // Entry for (1,1) -> 0
+        let entry_11 = self.encrypt_label(&[a1, b1], &c0);
+        garbled_table.push(entry_11);
+        
+        // Shuffle the table to hide the true mapping
+        self.shuffle_garbled_table(&mut garbled_table);
+        
         Ok(GarbledGate {
             id: gate.id,
             gate_type: gate.gate_type.clone(),
             input_wires: gate.input_wires.clone(),
             output_wire: gate.output_wire,
-            garbled_table: None, // Free XOR - no table needed
+            garbled_table: Some(garbled_table),
         })
     }
     
@@ -243,6 +268,6 @@ mod tests {
         
         let garbled_gate = &garbled_circuit.gates[0];
         assert_eq!(garbled_gate.gate_type, GateType::Xor);
-        assert!(garbled_gate.garbled_table.is_none()); // Free XOR
+        assert!(garbled_gate.garbled_table.is_some()); // XOR with garbled table for correctness
     }
 }
