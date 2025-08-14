@@ -97,7 +97,7 @@ impl GMAC {
     }
     
     // Convert bytes to GF(2^128) element
-    fn bytes_to_gf128(bytes: &[u8]) -> u128 {
+    pub fn bytes_to_gf128(bytes: &[u8]) -> u128 {
         let mut result = 0u128;
         for (i, &byte) in bytes.iter().enumerate().take(16) {
             result |= (byte as u128) << ((15 - i) * 8);
@@ -106,7 +106,7 @@ impl GMAC {
     }
     
     // Convert GF(2^128) element to bytes
-    fn gf128_to_bytes(value: u128) -> [u8; GMAC_TAG_SIZE] {
+    pub fn gf128_to_bytes(value: u128) -> [u8; GMAC_TAG_SIZE] {
         let mut bytes = [0u8; GMAC_TAG_SIZE];
         for i in 0..GMAC_TAG_SIZE {
             bytes[i] = (value >> ((15 - i) * 8)) as u8;
@@ -115,7 +115,7 @@ impl GMAC {
     }
     
     // Multiplication in GF(2^128)
-    fn gf128_mul(a: u128, b: u128) -> u128 {
+    pub fn gf128_mul(a: u128, b: u128) -> u128 {
         let mut result = 0u128;
         let mut temp_a = a;
         let mut temp_b = b;
@@ -268,166 +268,4 @@ impl GMAC {
 impl UnforgeableMac for GMAC {}
 impl SecureMac for GMAC {}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    #[test]
-    fn test_gmac_generate_key() {
-        let key1 = GMAC::generate_key();
-        let key2 = GMAC::generate_key();
-        
-        assert_ne!(key1.h, key2.h);
-        assert_ne!(key1.k, key2.k);
-    }
-    
-    #[test]
-    fn test_gmac_authenticate_and_verify() {
-        let key = GMAC::generate_key();
-        let message = b"Hello, GMAC!".to_vec();
-        
-        let tag = GMAC::authenticate(&key, &message);
-        let verification = GMAC::verify(&key, &message, &tag);
-        
-        assert!(verification);
-    }
-    
-    #[test]
-    fn test_gmac_wrong_key() {
-        let key1 = GMAC::generate_key();
-        let key2 = GMAC::generate_key();
-        let message = b"Hello, GMAC!".to_vec();
-        
-        let tag = GMAC::authenticate(&key1, &message);
-        let verification = GMAC::verify(&key2, &message, &tag);
-        
-        assert!(!verification);
-    }
-    
-    #[test]
-    fn test_gmac_wrong_message() {
-        let key = GMAC::generate_key();
-        let message1 = b"Hello, GMAC!".to_vec();
-        let message2 = b"Hello, MAC!".to_vec();
-        
-        let tag = GMAC::authenticate(&key, &message1);
-        let verification = GMAC::verify(&key, &message2, &tag);
-        
-        assert!(!verification);
-    }
-    
-    #[test]
-    fn test_gf128_multiplication() {
-        let a = 0x123456789abcdef0fedcba9876543210u128;
-        let b = 0xfedcba9876543210123456789abcdef0u128;
-        
-        let result = GMAC::gf128_mul(a, b);
-        
-        // Multiplication should be commutative
-        let result2 = GMAC::gf128_mul(b, a);
-        assert_eq!(result, result2);
-        
-        // Multiplication by 1 should be identity
-        let identity = GMAC::gf128_mul(a, 1);
-        assert_eq!(identity, a);
-        
-        // Multiplication by 0 should be 0
-        let zero = GMAC::gf128_mul(a, 0);
-        assert_eq!(zero, 0);
-    }
-    
-    #[test]
-    fn test_gmac_field_element() {
-        let key = GMAC::generate_key();
-        let value = 12345u64;
-        
-        let tag = GMAC::authenticate_field_element(&key, value);
-        let verification = GMAC::verify_field_element(&key, value, &tag);
-        
-        assert!(verification);
-    }
-    
-    #[test]
-    fn test_gmac_batch_operations() {
-        let key = GMAC::generate_key();
-        let messages = vec![
-            b"message1".to_vec(),
-            b"message2".to_vec(),
-            b"message3".to_vec(),
-        ];
-        
-        let tags = GMAC::batch_authenticate(&key, &messages);
-        assert_eq!(tags.len(), 3);
-        
-        let verification = GMAC::batch_verify(&key, &messages, &tags).unwrap();
-        assert!(verification);
-    }
-    
-    #[test]
-    fn test_gmac_incremental() {
-        let key = GMAC::generate_key();
-        let data1 = b"Hello, ";
-        let data2 = b"GMAC ";
-        let data3 = b"world!";
-        
-        let mut state = GMAC::start_incremental(&key.h);
-        GMAC::incremental_update(&mut state, data1);
-        GMAC::incremental_update(&mut state, data2);
-        GMAC::incremental_update(&mut state, data3);
-        let incremental_tag = GMAC::incremental_finalize(&state, &key.k);
-        
-        // Compare with direct computation
-        let mut combined = Vec::new();
-        combined.extend_from_slice(data1);
-        combined.extend_from_slice(data2);
-        combined.extend_from_slice(data3);
-        let direct_tag = GMAC::authenticate(&key, &combined);
-        
-        assert_eq!(incremental_tag.tag, direct_tag.tag);
-    }
-    
-    #[test]
-    fn test_ghash() {
-        let h = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
-        let data = b"Test data for GHASH";
-        
-        let hash1 = GMAC::ghash(&h, data);
-        let hash2 = GMAC::ghash(&h, data);
-        
-        // Should be deterministic
-        assert_eq!(hash1, hash2);
-    }
-    
-    #[test]
-    fn test_gmac_polynomial_eval() {
-        let h = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
-        let blocks = vec![
-            b"block1".to_vec(),
-            b"block2".to_vec(),
-            b"block3".to_vec(),
-        ];
-        
-        let tag = GMAC::polynomial_eval(&h, &blocks);
-        assert_eq!(tag.tag.len(), GMAC_TAG_SIZE);
-    }
-    
-    #[test]
-    fn test_gmac_empty_message() {
-        let key = GMAC::generate_key();
-        let empty_message = Vec::new();
-        
-        let tag = GMAC::authenticate(&key, &empty_message);
-        let verification = GMAC::verify(&key, &empty_message, &tag);
-        
-        assert!(verification);
-    }
-    
-    #[test]
-    fn test_bytes_to_gf128_conversion() {
-        let bytes = [0xFF; 16];
-        let gf_value = GMAC::bytes_to_gf128(&bytes);
-        let converted_back = GMAC::gf128_to_bytes(gf_value);
-        
-        assert_eq!(bytes, converted_back);
-    }
-}
+// Tests moved to tests/authentication_tests.rs

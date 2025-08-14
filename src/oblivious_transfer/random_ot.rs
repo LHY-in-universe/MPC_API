@@ -214,7 +214,7 @@ mod tests {
         let mut rot = RandomOT::new();
         
         // Test with choice = false
-        let (r0, r1, rb) = rot.execute_random_ot(false).unwrap();
+        let (r0, _r1, rb) = rot.execute_random_ot(false).unwrap();
         assert_eq!(rb, r0); // Should get r0
         
         // Test with choice = true  

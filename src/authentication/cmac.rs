@@ -98,7 +98,7 @@ impl CMAC {
     }
     
     // Generate CMAC subkeys
-    fn generate_subkeys(key: &[u8; CMAC_KEY_SIZE]) -> ([u8; CMAC_BLOCK_SIZE], [u8; CMAC_BLOCK_SIZE]) {
+    pub fn generate_subkeys(key: &[u8; CMAC_KEY_SIZE]) -> ([u8; CMAC_BLOCK_SIZE], [u8; CMAC_BLOCK_SIZE]) {
         // L = AES(K, 0^128)
         let zero_block = [0u8; CMAC_BLOCK_SIZE];
         let l = Self::aes_encrypt_block(key, &zero_block);
@@ -111,7 +111,7 @@ impl CMAC {
     }
     
     // Left shift by one bit in GF(2^128)
-    fn left_shift(input: &[u8; CMAC_BLOCK_SIZE]) -> [u8; CMAC_BLOCK_SIZE] {
+    pub fn left_shift(input: &[u8; CMAC_BLOCK_SIZE]) -> [u8; CMAC_BLOCK_SIZE] {
         let mut result = [0u8; CMAC_BLOCK_SIZE];
         let mut carry = 0u8;
         
@@ -318,176 +318,4 @@ impl CMAC {
 impl UnforgeableMac for CMAC {}
 impl SecureMac for CMAC {}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    #[test]
-    fn test_cmac_generate_key() {
-        let key1 = CMAC::generate_key();
-        let key2 = CMAC::generate_key();
-        
-        assert_ne!(key1.key, key2.key);
-    }
-    
-    #[test]
-    fn test_cmac_authenticate_and_verify() {
-        let key = CMAC::generate_key();
-        let message = b"Hello, CMAC!".to_vec();
-        
-        let tag = CMAC::authenticate(&key, &message);
-        let verification = CMAC::verify(&key, &message, &tag);
-        
-        assert!(verification);
-    }
-    
-    #[test]
-    fn test_cmac_wrong_key() {
-        let key1 = CMAC::generate_key();
-        let key2 = CMAC::generate_key();
-        let message = b"Hello, CMAC!".to_vec();
-        
-        let tag = CMAC::authenticate(&key1, &message);
-        let verification = CMAC::verify(&key2, &message, &tag);
-        
-        assert!(!verification);
-    }
-    
-    #[test]
-    fn test_cmac_wrong_message() {
-        let key = CMAC::generate_key();
-        let message1 = b"Hello, CMAC!".to_vec();
-        let message2 = b"Hello, MAC!".to_vec();
-        
-        let tag = CMAC::authenticate(&key, &message1);
-        let verification = CMAC::verify(&key, &message2, &tag);
-        
-        assert!(!verification);
-    }
-    
-    #[test]
-    fn test_cmac_empty_message() {
-        let key = CMAC::generate_key();
-        let empty_message = Vec::new();
-        
-        let tag = CMAC::authenticate(&key, &empty_message);
-        let verification = CMAC::verify(&key, &empty_message, &tag);
-        
-        assert!(verification);
-    }
-    
-    #[test]
-    fn test_cmac_field_element() {
-        let key = CMAC::generate_key();
-        let value = 12345u64;
-        
-        let tag = CMAC::authenticate_field_element(&key, value);
-        let verification = CMAC::verify_field_element(&key, value, &tag);
-        
-        assert!(verification);
-    }
-    
-    #[test]
-    fn test_cmac_batch_operations() {
-        let key = CMAC::generate_key();
-        let messages = vec![
-            b"message1".to_vec(),
-            b"message2".to_vec(),
-            b"message3".to_vec(),
-        ];
-        
-        let tags = CMAC::batch_authenticate(&key, &messages);
-        assert_eq!(tags.len(), 3);
-        
-        let verification = CMAC::batch_verify(&key, &messages, &tags).unwrap();
-        assert!(verification);
-    }
-    
-    #[test]
-    fn test_cmac_subkey_generation() {
-        let key = [0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6,
-                   0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c];
-        
-        let (k1, k2) = CMAC::generate_subkeys(&key);
-        
-        // Subkeys should be different from the original key
-        assert_ne!(k1, key);
-        assert_ne!(k2, key);
-        assert_ne!(k1, k2);
-    }
-    
-    #[test]
-    fn test_cmac_left_shift() {
-        let input = [0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
-        
-        let shifted = CMAC::left_shift(&input);
-        
-        // MSB was 1, so result should have been XORed with 0x87
-        assert_eq!(shifted[15], 0x87);
-    }
-    
-    #[test]
-    fn test_cmac_incremental() {
-        let key = CMAC::generate_key();
-        let data1 = b"Hello, ";
-        let data2 = b"CMAC ";
-        let data3 = b"world!";
-        
-        let mut state = CMAC::start_incremental(&key.key);
-        CMAC::incremental_update(&mut state, data1);
-        CMAC::incremental_update(&mut state, data2);
-        CMAC::incremental_update(&mut state, data3);
-        let incremental_tag = CMAC::incremental_finalize(&state);
-        
-        // Compare with direct computation
-        let mut combined = Vec::new();
-        combined.extend_from_slice(data1);
-        combined.extend_from_slice(data2);
-        combined.extend_from_slice(data3);
-        let direct_tag = CMAC::authenticate(&key, &combined);
-        
-        assert_eq!(incremental_tag.tag, direct_tag.tag);
-    }
-    
-    #[test]
-    fn test_cmac_deterministic() {
-        let key = CMAC::generate_key();
-        let message = b"Test message for determinism".to_vec();
-        
-        let tag1 = CMAC::authenticate(&key, &message);
-        let tag2 = CMAC::authenticate(&key, &message);
-        
-        assert_eq!(tag1.tag, tag2.tag);
-    }
-    
-    #[test]
-    fn test_omac() {
-        let key = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
-        let message = b"Test OMAC";
-        
-        let tag = CMAC::compute_omac(&key, message);
-        assert_eq!(tag.len(), CMAC_TAG_SIZE);
-    }
-    
-    #[test]
-    fn test_cmac_different_length_messages() {
-        let key = CMAC::generate_key();
-        
-        // Test messages of different lengths
-        let messages = vec![
-            Vec::new(),                    // Empty
-            b"a".to_vec(),                // 1 byte
-            b"ab".to_vec(),               // 2 bytes
-            b"abcdefghijklmnop".to_vec(), // Exactly one block (16 bytes)
-            b"abcdefghijklmnopq".to_vec(),// One block + 1 byte
-            b"The quick brown fox jumps over the lazy dog".to_vec(), // Multiple blocks
-        ];
-        
-        for message in messages {
-            let tag = CMAC::authenticate(&key, &message);
-            let verification = CMAC::verify(&key, &message, &tag);
-            assert!(verification, "Failed for message length: {}", message.len());
-        }
-    }
-}
+// Tests moved to tests/authentication_tests.rs

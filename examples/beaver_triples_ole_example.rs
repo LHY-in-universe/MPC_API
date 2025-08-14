@@ -346,6 +346,7 @@ mod tests {
 }
 
 // 如果直接运行此文件，执行所有示例
+#[allow(dead_code)]
 fn main() -> Result<()> {
     run_all_ole_examples()
 }

@@ -119,8 +119,8 @@ impl OLEBeaverGenerator {
         self.triple_counter += 1;
         
         for i in 0..self.party_count {
-            // Use triple counter and party index to create unique IDs
-            let unique_triple_id = self.triple_counter * 1000 + (i + 1) as u64;
+            // Use party_id, triple counter and party index to create unique IDs
+            let unique_triple_id = (self.party_id as u64) * 1000000 + self.triple_counter * 1000 + (i + 1) as u64;
             let triple = BeaverTriple::new(
                 a_shares[i].clone(),
                 b_shares[i].clone(),
@@ -141,6 +141,11 @@ impl OLEBeaverGenerator {
     /// 获取重构门限
     pub fn get_threshold(&self) -> usize {
         self.threshold
+    }
+    
+    /// 获取当前方的 ID
+    pub fn get_party_id(&self) -> usize {
+        self.party_id
     }
 }
 

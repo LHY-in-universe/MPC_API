@@ -423,37 +423,10 @@ pub fn run_all_trusted_party_examples() -> Result<()> {
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    #[test]
-    fn test_basic_trusted_party() {
-        basic_trusted_party_example().unwrap();
-    }
-    
-    #[test]
-    fn test_trusted_party_configuration() {
-        trusted_party_configuration_example().unwrap();
-    }
-    
-    #[test]
-    fn test_high_performance_batch() {
-        high_performance_batch_example().unwrap();
-    }
-    
-    #[test]
-    fn test_trusted_party_audit() {
-        trusted_party_audit_example().unwrap();
-    }
-    
-    #[test]
-    fn test_multi_party_collaboration() {
-        multi_party_collaboration_example().unwrap();
-    }
-}
+// Tests moved to tests/examples_tests.rs
 
 // 如果直接运行此文件，执行所有示例
+#[allow(dead_code)]
 fn main() -> Result<()> {
     run_all_trusted_party_examples()
 }
