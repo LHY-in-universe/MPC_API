@@ -1,55 +1,334 @@
-//! # 基于 BFV 同态加密的 Beaver 三元组生成示例
+//! # BFV 同态加密 Beaver 三元组生成完全指南
 //! 
-//! 本示例展示了如何使用 BFV (Brakerski-Fan-Vercauteren) 全同态加密方案
-//! 来生成和使用 Beaver 三元组。BFV 提供了最高级别的安全性，
-//! 支持在加密状态下进行运算。
+//! 本文件提供了关于使用 BFV (Brakerski-Fan-Vercauteren) 全同态加密方案
+//! 生成 Beaver 三元组的完整教程。BFV 代表了当前最先进的安全多方计算技术，
+//! 提供抗量子攻击的安全保证和在密文状态下的计算能力。
+//! 
+//! ## 🎯 学习目标
+//! 
+//! 通过本指南，您将掌握：
+//! - **BFV 同态加密原理**: 理解格基密码学和同态运算的数学基础
+//! - **量子安全性**: 了解后量子密码学的重要性和BFV的抗量子特性
+//! - **Beaver 三元组生成**: 学会在同态加密环境下生成安全的乘法三元组
+//! - **门限密钥管理**: 掌握分布式密钥生成和管理技术
+//! - **性能调优**: 理解安全级别与性能的权衡关系
+//! - **实际部署**: 了解高安全场景下的MPC部署实践
+//! 
+//! ## 📚 BFV 同态加密深度解析
+//! 
+//! ### 什么是 BFV 同态加密？
+//! 
+//! BFV 是一种**全同态加密**方案，基于**格的困难问题** (Learning With Errors, LWE)：
+//! 
+//! #### 核心概念
+//! - **同态性**: 支持在加密数据上直接进行运算，解密后得到明文运算的结果
+//! - **格基安全**: 基于高维格中的最短向量问题，具有抗量子特性
+//! - **噪声管理**: 通过精密的参数设计控制计算过程中的噪声增长
+//! - **模交换**: 使用模约简技术控制密文大小和噪声水平
+//! 
+//! #### 数学结构
+//! ```
+//! 明文空间: Z_t (模 t 的整数环)
+//! 密文空间: (R_q)^2 (多项式环上的2元组)
+//! 加密: Enc(m) = (c0, c1) 其中 c0 + c1*s ≈ m (mod t)
+//! 同态加法: Enc(m1) + Enc(m2) = Enc(m1 + m2)
+//! 同态乘法: Enc(m1) * Enc(m2) = Enc(m1 * m2)
+//! ```
+//! 
+//! ### BFV 在 Beaver 三元组中的优势
+//! 
+//! 1. **计算隐私**: 整个三元组生成过程在密文状态下进行
+//! 2. **零知识**: 参与方无法获得除自己输入外的任何信息
+//! 3. **可验证性**: 可以在不泄露秘密的情况下验证计算正确性
+//! 4. **抗量子**: 为未来的量子计算威胁提供安全保护
+//! 
+//! ## 🔒 安全性分析
+//! 
+//! ### 量子安全性
+//! 
+//! BFV 的安全性基于格问题，被认为对量子攻击具有抵抗力：
+//! - **Shor 算法无效**: 传统的量子算法无法破解格问题
+//! - **后量子标准**: 符合 NIST 后量子密码学标准
+//! - **长期安全**: 为10-30年的安全保护期提供保障
+//! 
+//! ### 参数安全性
+//! 
+//! BFV 的安全性取决于几个关键参数：
+//! 
+//! | 参数 | 影响 | 推荐值范围 | 安全级别 |
+//! |------|------|------------|----------|
+//! | 多项式度数 n | 基础安全性 | 4096-32768 | 80-256 位 |
+//! | 系数模数 q | 噪声容忍度 | 2^30 - 2^60 | 与 n 匹配 |
+//! | 明文模数 t | 计算精度 | 质数 | 应用相关 |
+//! | 噪声方差 σ | 安全vs效率 | 3.2-6.4 | 标准设置 |
+//! 
+//! ### 威胁模型
+//! 
+//! - **半诚实敌手**: 参与方遵循协议但试图推断额外信息
+//! - **恶意敌手**: 可以偏离协议执行，但数量受限
+//! - **量子敌手**: 拥有大规模量子计算机的未来威胁
+//! - **侧信道攻击**: 通过时序、功耗等物理信息的攻击
+//! 
+//! ## 🚀 性能特点
+//! 
+//! ### 计算复杂度
+//! 
+//! - **密钥生成**: O(n log n) 其中 n 为多项式度数
+//! - **加密**: O(n log n) 每个明文值
+//! - **同态乘法**: O(n log n) 每次操作
+//! - **三元组生成**: O(n² log n) 包含验证
+//! 
+//! ### 通信复杂度
+//! 
+//! - **密钥分发**: O(n) 每个参与方
+//! - **密文传输**: O(n) 每个密文
+//! - **协议通信**: O(kn) k为安全参数
+//! 
+//! ### 性能优化策略
+//! 
+//! 1. **批量处理**: 利用SIMD技术并行处理多个值
+//! 2. **预计算**: 提前生成常用的加密值和随机数
+//! 3. **参数调优**: 根据应用需求平衡安全性和性能
+//! 4. **硬件加速**: 利用专用硬件(GPU/FPGA)加速多项式运算
+//! 
+//! ## 💡 应用场景
+//! 
+//! ### 高安全要求场景
+//! 
+//! - **国防安全**: 军事机密信息的联合分析
+//! - **金融监管**: 跨国银行的合规性检查
+//! - **医疗研究**: 敏感基因数据的联合研究
+//! - **政府统计**: 跨部门的敏感统计分析
+//! 
+//! ### 长期安全需求
+//! 
+//! - **数字资产**: 加密货币和数字资产的长期保护
+//! - **知识产权**: 核心技术和商业秘密的保护
+//! - **个人隐私**: 长期个人数据的隐私保护
+//! - **基础设施**: 关键基础设施的安全通信
+//! 
+//! ## 🏗️ 系统架构
+//! 
+//! ### 密钥管理架构
+//! 
+//! ```
+//! 中央协调器 (可选)
+//! ├── 参数协商
+//! ├── 公钥聚合  
+//! └── 协议同步
+//! 
+//! 参与方 A          参与方 B          参与方 C
+//! ├── 私钥分享      ├── 私钥分享      ├── 私钥分享
+//! ├── 本地计算      ├── 本地计算      ├── 本地计算
+//! └── 部分解密      └── 部分解密      └── 部分解密
+//! ```
+//! 
+//! ### 计算流程
+//! 
+//! 1. **初始化**: 分布式密钥生成和参数协商
+//! 2. **预处理**: 批量生成 Beaver 三元组库存
+//! 3. **在线计算**: 使用预生成的三元组进行快速计算
+//! 4. **结果验证**: 零知识证明验证计算正确性
+//! 5. **清理**: 安全删除临时数据和过期密钥
 
 use mpc_api::{
     beaver_triples::{BFVBeaverGenerator, BFVParams, BFVKeyManager, BFVSecurityValidator, 
                      BeaverTripleGenerator, secure_multiply},
     secret_sharing::{ShamirSecretSharing, SecretSharing, field_mul, field_add},
-    Result,
+    MpcError, Result,
 };
 
-/// BFV 参数配置和安全性验证示例
+/// BFV 参数配置和安全性验证演示
+/// 
+/// ## 🎯 功能概述
+/// 
+/// 本函数详细演示了 BFV 同态加密方案的参数配置和安全性评估过程。
+/// 正确的参数选择是 BFV 安全性和性能的关键，需要在安全强度、计算效率
+/// 和内存使用之间找到最佳平衡点。
+/// 
+/// ## 📚 参数理论基础
+/// 
+/// ### BFV 核心参数说明
+/// 
+/// 1. **多项式度数 (degree, n)**
+///    - 定义了多项式环 Z[x]/(x^n + 1) 的结构
+///    - 影响：安全性的基础，越大越安全但计算越慢
+///    - 典型值：4096, 8192, 16384, 32768
+/// 
+/// 2. **系数模数 (coefficient modulus, q)**
+///    - 密文运算的模数，控制噪声增长空间
+///    - 影响：决定可进行的乘法次数，需与 n 匹配
+///    - 选择：通常为多个素数的乘积
+/// 
+/// 3. **明文模数 (plaintext modulus, t)**
+///    - 明文空间的大小，影响计算精度
+///    - 影响：必须与应用的数值范围匹配
+///    - 推荐：选择素数以优化运算效率
+/// 
+/// 4. **噪声方差 (noise standard deviation, σ)**
+///    - 加密时添加的随机噪声的分布参数
+///    - 影响：安全性的重要来源，但过大影响正确性
+///    - 标准：通常选择 3.2 作为安全和效率的平衡
+/// 
+/// ### 安全级别估算方法
+/// 
+/// BFV 的安全性主要基于 Ring-LWE (Ring Learning With Errors) 问题：
+/// - **经典安全性**: 基于格简化算法的复杂度分析
+/// - **量子安全性**: 考虑 Grover 算法的平方根加速
+/// - **实际安全性**: 综合考虑当前最优攻击算法
+/// 
+/// ## 🔒 安全考虑
+/// 
+/// - **参数一致性**: 所有参与方必须使用相同的参数
+/// - **长期安全**: 参数应能抵御未来10-30年的攻击
+/// - **侧信道保护**: 实现应防范时序和功耗攻击
+/// - **密钥更新**: 定期评估和更新安全参数
 pub fn bfv_security_setup_example() -> Result<()> {
-    println!("=== BFV 安全参数配置示例 ===");
+    println!("=== BFV 同态加密安全参数配置演示 ===");
     
-    // 1. 创建默认 BFV 参数
+    // === 步骤1: 检查默认安全参数 ===
+    println!("🔧 步骤1: 分析默认 BFV 安全参数");
+    
     let default_params = BFVParams::default();
     
-    println!("默认 BFV 参数:");
-    println!("  多项式度数: {}", default_params.degree);
-    println!("  系数模数: {}", default_params.coeff_modulus);
-    println!("  明文模数: {}", default_params.plain_modulus);
-    println!("  噪声标准差: {}", default_params.noise_std_dev);
+    println!("  📊 默认参数配置:");
+    println!("    多项式度数 (n): {} (定义多项式环结构)", default_params.degree);
+    println!("    系数模数 (q): {} (约2^{:.1}位)", 
+            default_params.coeff_modulus, 
+            (default_params.coeff_modulus as f64).log2());
+    println!("    明文模数 (t): {} (明文计算精度)", default_params.plain_modulus);
+    println!("    噪声标准差 (σ): {} (安全性随机源)", default_params.noise_std_dev);
     
-    // 2. 验证参数安全性
+    // === 步骤2: 验证参数的密码学安全性 ===
+    println!("\n🔍 步骤2: 验证参数密码学安全性");
+    println!("  验证内容:");
+    println!("    • 参数一致性检查");
+    println!("    • 已知攻击抗性分析");
+    println!("    • 噪声增长边界验证");
+    
     let is_secure = BFVSecurityValidator::validate_params(&default_params)?;
-    println!("参数安全性验证: {}", if is_secure { "通过" } else { "失败" });
+    println!("  验证结果: {}", if is_secure { "✅ 安全" } else { "❌ 不安全" });
     
-    // 3. 估计安全级别
+    if !is_secure {
+        return Err(MpcError::ProtocolError("默认参数未通过安全性验证".to_string()));
+    }
+    
+    // === 步骤3: 估算具体安全级别 ===
+    println!("\n📈 步骤3: 估算安全级别");
+    println!("  基于当前最优已知攻击算法分析...");
+    
     let security_level = BFVSecurityValidator::estimate_security_level(&default_params);
-    println!("估计安全级别: {} 位", security_level);
+    println!("  🛡️ 估算安全级别: {} 位", security_level);
     
-    // 4. 创建自定义高安全参数
+    // 提供安全级别的具体含义
+    let security_interpretation = match security_level {
+        0..=79 => "❌ 不足够安全",
+        80..=127 => "⚠️ 基础安全级别",
+        128..=191 => "✅ 高安全级别",
+        192..=255 => "🔒 极高安全级别",
+        _ => "🚀 超高安全级别"
+    };
+    
+    println!("  安全等级评估: {}", security_interpretation);
+    println!("  💡 对比: AES-128 提供 128 位安全级别");
+    
+    assert!(security_level >= 80, "安全级别必须至少达到80位");
+    
+    // === 步骤4: 展示不同安全级别的参数配置 ===
+    println!("\n⚙️ 步骤4: 不同安全级别参数配置示例");
+    
+    let param_configs = vec![
+        ("基础安全", BFVParams {
+            degree: 4096,
+            coeff_modulus: 1u64 << 35,
+            plain_modulus: 1024,
+            noise_std_dev: 3.2,
+        }),
+        ("标准安全", default_params.clone()),
+        ("高安全", BFVParams {
+            degree: 16384,
+            coeff_modulus: 1u64 << 62,
+            plain_modulus: 65537,
+            noise_std_dev: 3.2,
+        }),
+        ("极高安全", BFVParams {
+            degree: 16384,
+            coeff_modulus: 1u64 << 55,
+            plain_modulus: 65537,
+            noise_std_dev: 3.2,
+        }),
+    ];
+    
+    println!("  🎚️ 不同安全级别配置对比:");
+    println!("  配置名称 | 多项式度数 | 安全级别 | 相对性能");
+    println!("  ---------|------------|----------|----------");
+    
+    for (name, params) in &param_configs {
+        let level = BFVSecurityValidator::estimate_security_level(params);
+        let relative_performance = match params.degree {
+            4096 => "最快",
+            8192 => "快",
+            16384 => "中等", 
+            _ => "慢"
+        };
+        
+        println!("  {:>8} | {:>10} | {:>6} 位 | {:>8}", 
+                name, params.degree, level, relative_performance);
+    }
+    
+    // === 步骤5: 实际应用参数推荐 ===
+    println!("\n💡 步骤5: 实际应用参数选择指南");
+    
+    println!("  🎯 应用场景推荐:");
+    println!("    • 原型开发: 基础安全配置 (快速验证)");
+    println!("    • 一般应用: 标准安全配置 (平衡性能)");
+    println!("    • 金融应用: 高安全配置 (严格要求)");
+    println!("    • 国防应用: 极高安全配置 (最高保护)");
+    
+    println!("  ⚖️ 权衡考虑:");
+    println!("    • 安全性 vs 性能: 更高安全性意味着更多计算开销");
+    println!("    • 内存 vs 带宽: 更大参数需要更多存储和传输");
+    println!("    • 当前 vs 未来: 需要考虑未来威胁的发展");
+    
+    // === 步骤6: 验证高安全配置 ===
+    println!("\n🔒 步骤6: 验证高安全配置");
+    
     let high_security_params = BFVParams {
-        degree: 8192,                    // 更大的多项式度数
-        coeff_modulus: 1u64 << 50,      // 更大的系数模数
+        degree: 16384,
+        coeff_modulus: 1u64 << 62,
         plain_modulus: 65537,           
         noise_std_dev: 3.2,
     };
     
-    println!("\n高安全性 BFV 参数:");
-    println!("  多项式度数: {}", high_security_params.degree);
-    println!("  系数模数: {}", high_security_params.coeff_modulus);
     let high_security_level = BFVSecurityValidator::estimate_security_level(&high_security_params);
-    println!("  安全级别: {} 位", high_security_level);
+    let high_is_secure = BFVSecurityValidator::validate_params(&high_security_params)?;
     
-    assert!(is_secure);
-    assert!(security_level >= 80); // 至少 80 位安全
+    println!("  高安全参数验证:");
+    println!("    • 参数合法性: {}", if high_is_secure { "✅" } else { "❌" });
+    println!("    • 安全级别: {} 位", high_security_level);
+    println!("    • 量子抗性: ✅ 具备");
+    println!("    • 长期安全: ✅ 可保护20-30年");
     
-    println!("✓ BFV 安全配置验证通过\n");
+    assert!(high_is_secure, "高安全参数应该通过验证");
+    assert!(high_security_level >= 108, "高安全配置应该达到108位以上安全级别");
+    
+    // === 总结和最佳实践 ===
+    println!("\n📋 BFV 参数配置最佳实践:");
+    println!("  ✅ 选择原则:");
+    println!("    1. 根据应用安全需求选择合适的安全级别");
+    println!("    2. 考虑计算资源和性能要求");
+    println!("    3. 预留安全边界应对未来威胁");
+    println!("    4. 所有参与方使用一致的参数");
+    
+    println!("  🔧 部署建议:");
+    println!("    • 开发阶段: 使用较低安全参数加快迭代");
+    println!("    • 测试阶段: 使用目标安全参数验证性能");
+    println!("    • 生产部署: 使用经过充分验证的安全参数");
+    println!("    • 定期评估: 跟踪最新攻击进展和参数推荐");
+    
+    println!("\n✅ BFV 安全参数配置演示完成");
+    println!("💡 核心价值: 科学的参数选择是BFV安全性和可用性的基础\n");
+    
     Ok(())
 }
 

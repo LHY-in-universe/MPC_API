@@ -110,16 +110,37 @@ pub trait BeaverTripleGenerator {
 
 impl BeaverTriple {
     /// 创建新的 Beaver 三元组分享
+    /// 
+    /// # 参数
+    /// 
+    /// * `a` - a 值的分享
+    /// * `b` - b 值的分享
+    /// * `c` - c = a * b 值的分享
+    /// * `id` - 三元组的唯一标识符
+    /// 
+    /// # 返回值
+    /// 
+    /// 返回新创建的 `BeaverTriple` 实例
     pub fn new(a: Share, b: Share, c: Share, id: u64) -> Self {
         Self { a, b, c, id }
     }
     
     /// 验证三元组分享的一致性 (相同的 x 坐标)
+    /// 
+    /// 检查 a、b、c 的分享是否都属于同一参与方
+    /// 
+    /// # 返回值
+    /// 
+    /// 如果三个分享都属于同一参与方返回 `true`，否则返回 `false`
     pub fn is_consistent(&self) -> bool {
         self.a.x == self.b.x && self.b.x == self.c.x
     }
     
     /// 获取参与方 ID
+    /// 
+    /// # 返回值
+    /// 
+    /// 返回持有此三元组分享的参与方 ID
     pub fn get_party_id(&self) -> usize {
         self.a.x as usize
     }
@@ -127,6 +148,14 @@ impl BeaverTriple {
 
 impl CompleteBeaverTriple {
     /// 创建新的完整 Beaver 三元组
+    /// 
+    /// # 参数
+    /// 
+    /// * `shares` - 所有参与方的三元组分享映射表，键为参与方 ID
+    /// 
+    /// # 返回值
+    /// 
+    /// 返回新创建的 `CompleteBeaverTriple` 实例，不包含原始值
     pub fn new(shares: HashMap<usize, BeaverTriple>) -> Self {
         Self {
             shares,
@@ -135,6 +164,17 @@ impl CompleteBeaverTriple {
     }
     
     /// 创建带有原始值的 Beaver 三元组 (用于测试)
+    /// 
+    /// 注意：原始值仅用于测试和验证，在实际协议中不应该存在
+    /// 
+    /// # 参数
+    /// 
+    /// * `shares` - 所有参与方的三元组分享映射表，键为参与方 ID
+    /// * `original` - 原始的 (a, b, c) 值元组
+    /// 
+    /// # 返回值
+    /// 
+    /// 返回新创建的 `CompleteBeaverTriple` 实例，包含原始值
     pub fn new_with_values(
         shares: HashMap<usize, BeaverTriple>,
         original: (u64, u64, u64),
@@ -146,6 +186,14 @@ impl CompleteBeaverTriple {
     }
     
     /// 获取指定方的三元组分享
+    /// 
+    /// # 参数
+    /// 
+    /// * `party_id` - 参与方的 ID
+    /// 
+    /// # 返回值
+    /// 
+    /// 如果存在该参与方的分享，返回 `Some(&BeaverTriple)`，否则返回 `None`
     pub fn get_share(&self, party_id: usize) -> Option<&BeaverTriple> {
         self.shares.get(&party_id)
     }

@@ -66,60 +66,132 @@ use mpc_api::{
     beaver_triples::{TrustedPartyBeaverGenerator, BatchTrustedPartyGenerator, TrustedPartyConfig,
                      TrustedPartyAuditor, BeaverTripleGenerator, secure_multiply, verify_triple_batch},
     secret_sharing::{ShamirSecretSharing, SecretSharing, field_mul, field_add},
-    Result,
+    MpcError, Result,
 };
 
 /// 基本的可信第三方 Beaver 三元组生成示例
+/// 
+/// ## 🎯 功能演示
+/// 
+/// 本函数展示了完整的 Beaver 三元组生命周期：
+/// 1. **生成器创建**: 配置可信第三方参数
+/// 2. **三元组生成**: 创建满足 c = a × b 的三元组
+/// 3. **分享分发**: 将三元组安全分享给各参与方
+/// 4. **正确性验证**: 验证三元组的数学正确性
+/// 5. **安全乘法**: 使用三元组进行实际的安全计算
+/// 
+/// ## 📋 协议参数说明
+/// 
+/// - **party_count**: 参与方总数，决定分享的生成数量
+/// - **threshold**: 重构门限，影响容错能力和安全性
+/// - **party_id**: 当前方标识，用于模拟分布式环境
+/// 
+/// ## 🔒 安全考虑
+/// 
+/// - 可信第三方必须在使用后安全删除原始三元组
+/// - 生成的分享应通过安全信道分发
+/// - 建议定期轮换和更新三元组库存
 pub fn basic_trusted_party_example() -> Result<()> {
     println!("=== 基于可信第三方的 Beaver 三元组生成示例 ===");
     
-    let party_count = 3;
-    let threshold = 2;
-    let party_id = 0;
+    // 步骤1: 配置协议参数
+    // 这些参数定义了MPC协议的基本结构
+    let party_count = 3;    // 3方协议，支持更多方扩展
+    let threshold = 2;      // 2-out-of-3 门限，可容忍1方故障
+    let party_id = 0;       // 当前模拟的参与方ID (0, 1, 2)
     
-    // 1. 使用默认配置创建可信第三方生成器
+    println!("🔧 协议配置:");
+    println!("  参与方数量: {} (支持最多{}方同时计算)", party_count, party_count);
+    println!("  重构门限: {} (需要{}方合作才能恢复秘密)", threshold, threshold);
+    println!("  当前方ID: {} (模拟分布式环境中的第{}方)", party_id, party_id + 1);
+    println!("  容错能力: 可容忍{}方故障或离线", party_count - threshold);
+    
+    // 步骤2: 创建可信第三方生成器
+    // 可信第三方负责生成高质量的随机三元组
+    println!("\n⚙️ 初始化可信第三方生成器...");
     let mut tp_generator = TrustedPartyBeaverGenerator::new(
-        party_count, 
-        threshold, 
-        party_id, 
-        None
+        party_count,  // 为所有参与方生成分享
+        threshold,    // 使用指定的门限值
+        party_id,     // 当前方的身份标识
+        None          // 使用默认的安全参数
     )?;
     
-    println!("创建可信第三方 Beaver 生成器成功");
-    println!("参与方数量: {}, 门限值: {}", party_count, threshold);
+    println!("✅ 可信第三方生成器创建成功");
+    println!("🔐 生成器配置: {}方参与，{}门限", party_count, threshold);
     
-    // 2. 生成单个 Beaver 三元组
+    // 步骤3: 生成 Beaver 三元组
+    // 可信第三方生成满足 c = a × b 的随机三元组
+    println!("\n🎲 生成 Beaver 三元组...");
     let beaver_triple = tp_generator.generate_single()?;
-    println!("生成 Beaver 三元组成功");
+    println!("✅ Beaver 三元组生成成功");
     
-    // 3. 验证三元组
+    // 步骤4: 验证三元组的数学正确性
+    // 确保生成的三元组满足乘法关系
+    println!("\n🔍 验证三元组正确性...");
     let is_valid = tp_generator.verify_triple(&beaver_triple)?;
-    println!("三元组验证结果: {}", if is_valid { "通过" } else { "失败" });
+    println!("三元组验证结果: {}", if is_valid { "✅ 通过" } else { "❌ 失败" });
     
-    // 4. 显示三元组信息
-    println!("三元组分享数量: {}", beaver_triple.shares.len());
+    if !is_valid {
+        return Err(MpcError::ProtocolError("三元组验证失败，可能存在生成错误".to_string()));
+    }
     
+    // 步骤5: 分析三元组结构
+    println!("\n📊 三元组结构分析:");
+    println!("  生成的分享数量: {} (每个参与方一个)", beaver_triple.shares.len());
+    println!("  分享类型: Shamir 秘密分享");
+    println!("  安全参数: {} 门限，可容忍 {} 方故障", threshold, party_count - threshold);
+    
+    // 步骤6: 展示原始三元组值（仅用于教学目的）
+    // 在实际部署中，这些值应该立即删除
     if let Some((a, b, c)) = beaver_triple.original_values {
-        println!("可信第三方生成的原始值:");
-        println!("  a = {}", a);
-        println!("  b = {}", b);  
-        println!("  c = {} (= {} × {} = {})", c, a, b, field_mul(a, b));
+        println!("\n🔓 原始三元组值 (仅供验证，实际应用中会被删除):");
+        println!("  a = {} (第一个随机因子)", a);
+        println!("  b = {} (第二个随机因子)", b);  
+        println!("  c = {} (乘积: {} × {} = {})", c, a, b, field_mul(a, b));
         
-        assert_eq!(c, field_mul(a, b));
+        // 验证数学关系
+        let computed_c = field_mul(a, b);
+        assert_eq!(c, computed_c, "三元组不满足 c = a × b 关系");
+        println!("✅ 数学关系验证: c = a × b 成立");
     }
     
-    // 5. 显示各方的分享
-    println!("各参与方的分享:");
+    // 步骤7: 展示分享分发
+    println!("\n📦 各参与方获得的分享:");
     for (party_id, share) in &beaver_triple.shares {
-        println!("  方 {}: a_share=({},{}), b_share=({},{}), c_share=({},{})", 
-                party_id,
-                share.a.x, share.a.y,
-                share.b.x, share.b.y,
-                share.c.x, share.c.y);
+        println!("  📍 参与方 {}:", party_id);
+        println!("    a的分享: 点({}, {}) [多项式f_a在x={}处的值]", 
+                share.a.x, share.a.y, share.a.x);
+        println!("    b的分享: 点({}, {}) [多项式f_b在x={}处的值]", 
+                share.b.x, share.b.y, share.b.x);
+        println!("    c的分享: 点({}, {}) [多项式f_c在x={}处的值]", 
+                share.c.x, share.c.y, share.c.x);
+        println!();
     }
     
-    assert!(is_valid);
-    println!("✓ 基本可信第三方生成测试通过\n");
+    // 步骤8: 验证分享的重构能力
+    println!("🔧 验证分享重构能力:");
+    
+    // 收集所有参与方的a分享
+    let a_shares: Vec<_> = beaver_triple.shares.values()
+        .map(|share| share.a.clone())
+        .collect();
+    
+    // 使用门限数量的分享重构原始值a
+    if let Some(original_a) = beaver_triple.original_values.as_ref().map(|(a, _, _)| *a) {
+        let reconstructed_a = ShamirSecretSharing::reconstruct(&a_shares[0..threshold], threshold)?;
+        println!("  原始a值: {}", original_a);
+        println!("  重构a值: {}", reconstructed_a);
+        assert_eq!(original_a, reconstructed_a, "a值重构失败");
+        println!("✅ a分享重构验证成功");
+    }
+    
+    println!("\n🎉 基本可信第三方 Beaver 三元组生成演示完成");
+    println!("💡 关键要点:");
+    println!("  1. 可信第三方高效生成满足 c = a × b 的随机三元组");
+    println!("  2. 三元组以秘密分享形式安全分发给各参与方");
+    println!("  3. 每个参与方只知道自己的分享，无法获知原始值");
+    println!("  4. 任意{}个参与方可以合作重构完整的三元组", threshold);
+    println!("  5. 生成的三元组可用于后续的安全乘法运算\n");
     
     Ok(())
 }

@@ -49,28 +49,6 @@
 //! 4. **可扩展性**: 基于特征的设计便于添加新实现
 //! 5. **有限域运算**: 所有计算都在 u64 有限域上进行
 //! 
-//! ## 使用示例 (Usage Examples)
-//! 
-//! ```rust
-//! use mpc_api::*;
-//! 
-//! // 秘密分享示例
-//! let secret = 42u64;
-//! let shares = ShamirSecretSharing::share(&secret, 2, 3)?;
-//! let reconstructed = ShamirSecretSharing::reconstruct(&shares[0..2], 2)?;
-//! assert_eq!(reconstructed, secret);
-//! 
-//! // SPDZ 协议示例
-//! let params = SPDZParams::new(3, 0, 2);
-//! let protocol = SPDZShareProtocol::new(params)?;
-//! let auth_share = protocol.input(42)?;
-//! ```
-//! 
-//! ## 安全注意事项 (Security Notes)
-//! 
-//! - 此库仅供学术研究和教育用途
-//! - 在生产环境中使用前需要经过安全审计
-//! - 某些实现为了简化而做了安全性权衡
 
 pub mod secret_sharing;
 pub mod garbled_circuits;

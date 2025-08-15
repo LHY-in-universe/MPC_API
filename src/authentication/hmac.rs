@@ -1,6 +1,26 @@
-//! HMAC (Hash-based Message Authentication Code)
+//! # HMAC 实现 (Hash-based Message Authentication Code)
 //! 
-//! Implements HMAC using SHA-256 hash function
+//! 本模块实现了基于哈希函数的消息认证码 (HMAC)，使用 SHA-256 作为底层哈希函数。
+//! HMAC 是一种广泛使用的消息认证码算法，提供了强大的安全保证。
+//! 
+//! ## 算法特性
+//! 
+//! - **安全性**: 基于 SHA-256 的密码学强度
+//! - **效率**: 适合大量数据的认证
+//! - **标准化**: 符合 RFC 2104 标准
+//! - **密钥长度**: 支持任意长度的密钥（推荐 32 字节）
+//! - **标签长度**: 固定 32 字节输出
+//! 
+//! ## 使用示例
+//! 
+//! ```rust
+//! use mpc_api::authentication::*;
+//! 
+//! let key = HMAC::generate_key();
+//! let message = b"Hello, World!".to_vec();
+//! let tag = HMAC::authenticate(&key, &message);
+//! assert!(HMAC::verify(&key, &message, &tag));
+//! ```
 
 use crate::{MpcError, Result};
 // use crate::secret_sharing::FIELD_PRIME; // Unused import
@@ -9,20 +29,37 @@ use rand::{Rng, thread_rng};
 use sha2::{Sha256, Digest};
 use serde::{Deserialize, Serialize};
 
+/// HMAC 密钥的推荐大小（字节）
 const HMAC_KEY_SIZE: usize = 32;
+/// HMAC 算法的块大小（字节），对应 SHA-256 的块大小
 const HMAC_BLOCK_SIZE: usize = 64;
+/// HMAC 标签的大小（字节），对应 SHA-256 的输出大小
 const HMAC_TAG_SIZE: usize = 32;
 
+/// HMAC 密钥结构
+/// 
+/// 封装了用于 HMAC 计算的密钥数据。密钥长度固定为 32 字节，
+/// 提供了足够的安全强度。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HmacKey {
+    /// 32 字节的密钥数据
     pub key: [u8; HMAC_KEY_SIZE],
 }
 
+/// HMAC 认证标签结构
+/// 
+/// 封装了 HMAC 算法生成的认证标签。标签长度固定为 32 字节，
+/// 对应 SHA-256 哈希函数的输出长度。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HmacTag {
+    /// 32 字节的认证标签
     pub tag: [u8; HMAC_TAG_SIZE],
 }
 
+/// HMAC 算法实现
+/// 
+/// 提供了完整的 HMAC-SHA256 实现，包括密钥生成、消息认证和验证功能。
+/// 实现了 RFC 2104 标准中定义的 HMAC 算法。
 pub struct HMAC;
 
 impl MessageAuthenticationCode for HMAC {
@@ -30,6 +67,13 @@ impl MessageAuthenticationCode for HMAC {
     type Message = Vec<u8>;
     type Tag = HmacTag;
     
+    /// 生成一个新的随机 HMAC 密钥
+    /// 
+    /// 使用密码学安全的随机数生成器生成 32 字节的随机密钥。
+    /// 
+    /// # 返回值
+    /// 
+    /// 返回新生成的 `HmacKey` 实例
     fn generate_key() -> Self::Key {
         let mut rng = thread_rng();
         let mut key = [0u8; HMAC_KEY_SIZE];
@@ -39,11 +83,37 @@ impl MessageAuthenticationCode for HMAC {
         HmacKey { key }
     }
     
+    /// 为消息生成 HMAC 认证标签
+    /// 
+    /// 使用给定的密钥对消息进行 HMAC-SHA256 计算，生成认证标签。
+    /// 
+    /// # 参数
+    /// 
+    /// * `key` - 用于认证的 HMAC 密钥
+    /// * `message` - 要认证的消息字节向量
+    /// 
+    /// # 返回值
+    /// 
+    /// 返回包含认证标签的 `HmacTag` 实例
     fn authenticate(key: &Self::Key, message: &Self::Message) -> Self::Tag {
         let tag = Self::compute_hmac(&key.key, message);
         HmacTag { tag }
     }
     
+    /// 验证消息和认证标签的有效性
+    /// 
+    /// 重新计算消息的 HMAC 标签，并与提供的标签进行安全比较。
+    /// 使用常时间比较算法防止时序攻击。
+    /// 
+    /// # 参数
+    /// 
+    /// * `key` - 用于验证的 HMAC 密钥
+    /// * `message` - 要验证的消息
+    /// * `tag` - 要验证的认证标签
+    /// 
+    /// # 返回值
+    /// 
+    /// 如果标签有效返回 `true`，否则返回 `false`
     fn verify(key: &Self::Key, message: &Self::Message, tag: &Self::Tag) -> bool {
         let computed_tag = Self::authenticate(key, message);
         Self::secure_compare(&computed_tag.tag, &tag.tag)
@@ -51,16 +121,35 @@ impl MessageAuthenticationCode for HMAC {
 }
 
 impl Default for HMAC {
+    /// 创建默认的 HMAC 实例
     fn default() -> Self {
         Self::new()
     }
 }
 
 impl HMAC {
+    /// 创建新的 HMAC 实例
+    /// 
+    /// # 返回值
+    /// 
+    /// 返回新的 HMAC 实例
     pub fn new() -> Self {
         HMAC
     }
     
+    /// 计算 HMAC-SHA256 标签
+    /// 
+    /// 实现标准的 HMAC 算法，按照 RFC 2104 规范：
+    /// HMAC(K, m) = H((K ⊕ opad) || H((K ⊕ ipad) || m))
+    /// 
+    /// # 参数
+    /// 
+    /// * `key` - 用于计算的密钥字节切片
+    /// * `message` - 要认证的消息字节切片
+    /// 
+    /// # 返回值
+    /// 
+    /// 返回 32 字节的 HMAC 标签
     pub fn compute_hmac(key: &[u8], message: &[u8]) -> [u8; HMAC_TAG_SIZE] {
         let mut effective_key = [0u8; HMAC_BLOCK_SIZE];
         

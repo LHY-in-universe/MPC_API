@@ -1,31 +1,62 @@
-//! Poly1305 Message Authentication Code
+//! # Poly1305 消息认证码 (Poly1305 Message Authentication Code)
 //! 
-//! Implements the Poly1305 MAC algorithm using finite field arithmetic
+//! 实现基于有限域算术的 Poly1305 MAC 算法。
+//! 
+//! Poly1305 是一种快速且安全的消息认证码算法，由 Daniel J. Bernstein 设计。
+//! 它使用 130 位素数域上的多项式求值来计算认证标签。
+//! 
+//! ## 算法特点
+//! - 高性能：针对现代处理器优化
+//! - 安全性：基于数学难题的安全性保证
+//! - 简洁性：算法实现相对简单
+//! - 一次性密钥：每个消息使用唯一的密钥
+//! 
+//! ## 使用场景
+//! - 网络协议中的消息完整性验证
+//! - 文件完整性校验
+//! - 密码学协议中的认证步骤
 
 use crate::{MpcError, Result};
-// use crate::secret_sharing::FIELD_PRIME; // Unused import
+// use crate::secret_sharing::FIELD_PRIME; // 未使用的导入
 use super::{MessageAuthenticationCode, UnforgeableMac, SecureMac};
 use rand::{Rng, thread_rng};
 use serde::{Deserialize, Serialize};
 
-const _POLY1305_KEY_SIZE: usize = 32; // Prefix with underscore to avoid unused warning
+/// Poly1305 密钥大小（32字节）
+const _POLY1305_KEY_SIZE: usize = 32; // 添加下划线前缀避免未使用警告
+/// Poly1305 认证标签大小（16字节）
 const POLY1305_TAG_SIZE: usize = 16;
+/// Poly1305 块大小（16字节）
 const POLY1305_BLOCK_SIZE: usize = 16;
 
-// Poly1305 uses the prime 2^130 - 5, but we'll use a simplified version with our field
-const POLY1305_PRIME: u128 = (1u128 << 127) - 1; // Simplified prime for demonstration
+/// Poly1305 使用素数 2^130 - 5，这里使用简化版本进行演示
+const POLY1305_PRIME: u128 = (1u128 << 127) - 1; // 演示用的简化素数
 
+/// Poly1305 密钥结构
+/// 
+/// 包含两个16字节的组件：
+/// - r: 随机密钥组件，用于多项式计算
+/// - s: 秘密密钥组件，用于最终的标签生成
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Poly1305Key {
-    pub r: [u8; 16], // Random key component
-    pub s: [u8; 16], // Secret key component
+    /// 随机密钥组件（需要进行位掩码处理）
+    pub r: [u8; 16],
+    /// 秘密密钥组件
+    pub s: [u8; 16],
 }
 
+/// Poly1305 认证标签
+/// 
+/// 包含16字节的认证标签，用于验证消息的完整性和真实性。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Poly1305Tag {
+    /// 16字节的认证标签
     pub tag: [u8; POLY1305_TAG_SIZE],
 }
 
+/// Poly1305 消息认证码实现
+/// 
+/// 提供基于 Poly1305 算法的消息认证功能。
 pub struct Poly1305;
 
 impl MessageAuthenticationCode for Poly1305 {
@@ -33,33 +64,63 @@ impl MessageAuthenticationCode for Poly1305 {
     type Message = Vec<u8>;
     type Tag = Poly1305Tag;
     
+    /// 生成 Poly1305 密钥
+    /// 
+    /// 生成包含随机密钥组件 r 和秘密密钥组件 s 的密钥对。
+    /// r 组件会根据 Poly1305 规范进行位掩码处理以确保安全性。
+    /// 
+    /// # 返回值
+    /// 返回新生成的 Poly1305Key
     fn generate_key() -> Self::Key {
         let mut rng = thread_rng();
         let mut r = [0u8; 16];
         let mut s = [0u8; 16];
         
+        // 生成随机字节
         for i in 0..16 {
             r[i] = rng.gen();
             s[i] = rng.gen();
         }
         
-        // Clamp r according to Poly1305 specification (simplified)
-        r[3] &= 15;
-        r[7] &= 15;
-        r[11] &= 15;
-        r[15] &= 15;
-        r[4] &= 252;
-        r[8] &= 252;
-        r[12] &= 252;
+        // 根据 Poly1305 规范对 r 进行位掩码处理（简化版本）
+        // 这些掩码确保 r 的某些位被清零，以防止算术溢出
+        r[3] &= 15;   // 清除高4位
+        r[7] &= 15;   // 清除高4位
+        r[11] &= 15;  // 清除高4位
+        r[15] &= 15;  // 清除高4位
+        r[4] &= 252;  // 清除低2位
+        r[8] &= 252;  // 清除低2位
+        r[12] &= 252; // 清除低2位
         
         Poly1305Key { r, s }
     }
     
+    /// 对消息进行认证
+    /// 
+    /// 使用给定的密钥对消息计算 Poly1305 认证标签。
+    /// 
+    /// # 参数
+    /// * `key` - Poly1305 密钥
+    /// * `message` - 待认证的消息
+    /// 
+    /// # 返回值
+    /// 返回消息的认证标签
     fn authenticate(key: &Self::Key, message: &Self::Message) -> Self::Tag {
         let tag = Self::compute_poly1305(&key.r, &key.s, message);
         Poly1305Tag { tag }
     }
     
+    /// 验证消息的认证标签
+    /// 
+    /// 重新计算消息的认证标签并与提供的标签进行安全比较。
+    /// 
+    /// # 参数
+    /// * `key` - Poly1305 密钥
+    /// * `message` - 待验证的消息
+    /// * `tag` - 待验证的认证标签
+    /// 
+    /// # 返回值
+    /// 如果标签有效返回 true，否则返回 false
     fn verify(key: &Self::Key, message: &Self::Message, tag: &Self::Tag) -> bool {
         let computed_tag = Self::authenticate(key, message);
         Self::secure_compare(&computed_tag.tag, &tag.tag)
@@ -73,35 +134,62 @@ impl Default for Poly1305 {
 }
 
 impl Poly1305 {
+    /// 创建新的 Poly1305 实例
+    /// 
+    /// # 返回值
+    /// 返回 Poly1305 结构体实例
     pub fn new() -> Self {
         Poly1305
     }
     
-    // Simplified Poly1305 computation
+    /// 计算 Poly1305 认证标签（简化实现）
+    /// 
+    /// 使用 Poly1305 算法对消息进行认证标签计算。算法步骤：
+    /// 1. 将消息分割为16字节的块
+    /// 2. 对每个块添加填充位
+    /// 3. 使用多项式求值计算累加器
+    /// 4. 添加秘密密钥组件得到最终标签
+    /// 
+    /// # 参数
+    /// * `r` - 16字节的随机密钥组件
+    /// * `s` - 16字节的秘密密钥组件
+    /// * `message` - 待认证的消息字节序列
+    /// 
+    /// # 返回值
+    /// 返回16字节的认证标签
     pub fn compute_poly1305(r: &[u8; 16], s: &[u8; 16], message: &[u8]) -> [u8; POLY1305_TAG_SIZE] {
         let r_value = Self::bytes_to_u128(r);
         let s_value = Self::bytes_to_u128(s);
         
         let mut accumulator = 0u128;
         
-        // Process message in 16-byte blocks
+        // 以16字节块为单位处理消息
         for chunk in message.chunks(POLY1305_BLOCK_SIZE) {
-            let mut block = [0u8; 17]; // 16 bytes + 1 for padding
+            let mut block = [0u8; 17]; // 16字节 + 1字节填充
             block[..chunk.len()].copy_from_slice(chunk);
-            block[chunk.len()] = 1; // Add padding bit
+            block[chunk.len()] = 1; // 添加填充位
             
             let block_value = Self::bytes_to_u128(&block[..16]);
             
-            // Add to accumulator and multiply by r (avoid overflow)
+            // 累加到累加器并乘以 r（避免溢出）
             accumulator = (accumulator + block_value) % POLY1305_PRIME;
             accumulator = (accumulator as u128).wrapping_mul(r_value as u128) % POLY1305_PRIME;
         }
         
-        // Add s and reduce to get final tag (avoid overflow)
+        // 添加 s 并约简得到最终标签（避免溢出）
         let final_value = accumulator.wrapping_add(s_value) % (u128::MAX);
         Self::u128_to_bytes(final_value)
     }
     
+    /// 将字节数组转换为 u128 整数
+    /// 
+    /// 使用小端序将最多16字节的字节数组转换为128位整数。
+    /// 
+    /// # 参数
+    /// * `bytes` - 输入的字节切片
+    /// 
+    /// # 返回值
+    /// 转换后的 u128 值
     fn bytes_to_u128(bytes: &[u8]) -> u128 {
         let mut result = 0u128;
         for (i, &byte) in bytes.iter().take(16).enumerate() {
@@ -110,6 +198,15 @@ impl Poly1305 {
         result
     }
     
+    /// 将 u128 整数转换为字节数组
+    /// 
+    /// 使用小端序将128位整数转换为16字节的字节数组。
+    /// 
+    /// # 参数
+    /// * `value` - 输入的 u128 值
+    /// 
+    /// # 返回值
+    /// 转换后的16字节数组
     fn u128_to_bytes(value: u128) -> [u8; POLY1305_TAG_SIZE] {
         let mut bytes = [0u8; POLY1305_TAG_SIZE];
         for i in 0..POLY1305_TAG_SIZE {
@@ -118,6 +215,17 @@ impl Poly1305 {
         bytes
     }
     
+    /// 安全的字节数组比较
+    /// 
+    /// 使用常时间比较算法防止时序攻击。
+    /// 即使字节数组不匹配，也会完成所有比较操作。
+    /// 
+    /// # 参数
+    /// * `a` - 第一个字节切片
+    /// * `b` - 第二个字节切片
+    /// 
+    /// # 返回值
+    /// 如果两个字节数组相等返回 true，否则返回 false
     fn secure_compare(a: &[u8], b: &[u8]) -> bool {
         if a.len() != b.len() {
             return false;
