@@ -25,18 +25,24 @@ impl NaorPinkasOT {
         }
     }
     
-    // Receiver's first message: pk_r = g^r
+    // Receiver's first message: pk_r = g^r if choice=0, g^(r+1) if choice=1
     pub fn receiver_round1(&mut self, choice: ChoiceBit) -> Result<u64> {
         self.receiver_choice = Some(choice);
         
         // Generate random receiver key
         let r = self.setup.receiver_private;
-        let base_pk = self.setup.pow_mod(self.setup.generator, r);
-        self.pk_r = Some(base_pk);
         
-        // In the Naor-Pinkas protocol, the receiver always sends g^r
-        // The choice affects which message they can decrypt, not what they send
-        Ok(base_pk)
+        // Standard Naor-Pinkas: modify the public key based on choice
+        let exponent = if choice {
+            field_add(r, 1) // r + 1 for choice = 1
+        } else {
+            r // r for choice = 0
+        };
+        
+        let pk_r = self.setup.pow_mod(self.setup.generator, exponent);
+        self.pk_r = Some(pk_r);
+        
+        Ok(pk_r)
     }
     
     // Sender's response: Generate h = g^s and compute OT messages
@@ -46,16 +52,20 @@ impl NaorPinkasOT {
         let h = self.setup.pow_mod(self.setup.generator, s); // h = g^s
         self.pk_s = Some(h);
         
-        // Compute shared secrets
-        // k0 = pk_r^s = (g^r)^s = g^(rs) if choice = 0
-        // k1 = (pk_r / h)^s = (g^r / g^s)^s = g^(r-s)s if choice = 1
+        // In standard Naor-Pinkas:
+        // If receiver chose 0: pk_r = g^r, so k0 = pk_r^s = g^(rs)
+        // If receiver chose 1: pk_r = g^(r+1), so k1 = pk_r^s = g^((r+1)s)
+        // 
+        // The sender computes:
+        // k0 = pk_r^s (works if receiver sent g^r)  
+        // k1 = (pk_r / g)^s (works if receiver sent g^(r+1))
         
         let k0 = self.setup.pow_mod(pk_r, s);
         
-        // For k1, we need (pk_r / h)^s
-        let h_inv = self.mod_inverse(h)?;
-        let pk_r_over_h = field_mul(pk_r, h_inv);
-        let k1 = self.setup.pow_mod(pk_r_over_h, s);
+        // For k1: if pk_r = g^(r+1), then pk_r/g = g^r, so (pk_r/g)^s = g^(rs)
+        let g_inv = self.mod_inverse(self.setup.generator)?;
+        let pk_r_over_g = field_mul(pk_r, g_inv);
+        let k1 = self.setup.pow_mod(pk_r_over_g, s);
         
         // Encrypt messages
         let key0 = self.derive_key(k0);
@@ -70,23 +80,15 @@ impl NaorPinkasOT {
     // Receiver's final step: Decrypt the chosen message
     pub fn receiver_round2(&self, h: u64, choice: ChoiceBit, enc_msg0: &[u8], enc_msg1: &[u8]) -> Result<Vec<u8>> {
         let r = self.setup.receiver_private;
-        let pk_r = self.pk_r.unwrap();
         
-        // Compute the decryption key based on choice
-        let k = if choice {
-            // For choice = 1: k = (pk_r / h)^r = ((g^r / g^s))^r 
-            // But we need to match what sender computed: k1 = (pk_r / h)^s
-            // So receiver computes: (h / g^r)^r but this gets complicated...
-            // Let's use a simpler approach: k = h^r / pk_r
-            let hr = self.setup.pow_mod(h, r);
-            let pk_r_inv = self.mod_inverse(pk_r)?;
-            field_mul(hr, pk_r_inv)
-        } else {
-            // For choice = 0: k = h^r = (g^s)^r = g^(rs) 
-            self.setup.pow_mod(h, r)
-        };
+        // In the corrected Naor-Pinkas protocol:
+        // - If choice = 0: receiver sent g^r, so can compute k0 = h^r = (g^s)^r = g^(rs)
+        // - If choice = 1: receiver sent g^(r+1), so can compute k1 = h^r = (g^s)^r = g^(rs)
+        // 
+        // The key is always h^r = g^(rs), but the receiver can only decrypt
+        // the message corresponding to their choice.
         
-        // Derive decryption key
+        let k = self.setup.pow_mod(h, r);
         let key = self.derive_key(k);
         
         // Decrypt the appropriate message based on choice

@@ -1,11 +1,24 @@
 //! 示例代码测试
 //! 
-//! 包含所有示例中的测试代码
+//! 本文件包含对MPC API所有示例代码的全面测试，覆盖以下主要功能区域：
+//! - Beaver三元组生成和验证 (Trusted Party, BFV, OLE)
+//! - 高级协议指南 (Hash承诺, Pedersen承诺, Merkle树)
+//! - 秘密分享和安全多方计算 (Shamir, 加法分享)
+//! - 认证和承诺方案 (HMAC, 签名数字承诺)
+//! - 混乱电路和安全计算 (Garbled Circuits)
+//! - 实际应用场景 (PPML, 私人拍卖, 统计分析)
+//! 
+//! 这些测试确保所有示例代码都能正确运行，为用户提供可靠的参考实现。
 
 use mpc_api::*;
 
 // ===== Beaver Triples Trusted Party Example Tests =====
+// Beaver三元组是安全多方计算中用于安全乘法的关键原语
 
+/// 测试基本的可信第三方Beaver三元组生成
+/// 
+/// 目的：验证可信第三方能够正确生成和验证Beaver三元组
+/// 预期：生成的三元组应该满足a*b=c的关系，且通过验证
 #[test]
 fn test_basic_trusted_party() {
     use mpc_api::{
@@ -14,20 +27,23 @@ fn test_basic_trusted_party() {
     };
 
     fn basic_trusted_party_example() -> Result<()> {
-        let party_count = 3;
-        let threshold = 2;
-        let party_id = 0;
+        let party_count = 3; // 参与方数量
+        let threshold = 2;   // 重构门限
+        let party_id = 0;    // 当前参与方ID
         
+        // 创建可信第三方Beaver三元组生成器
         let mut tp_generator = TrustedPartyBeaverGenerator::new(
             party_count, 
             threshold, 
             party_id, 
-            None
+            None // 使用默认配置
         )?;
         
+        // 生成单个三元组
         let beaver_triple = tp_generator.generate_single()?;
+        // 验证三元组的正确性
         let is_valid = tp_generator.verify_triple(&beaver_triple)?;
-        assert!(is_valid);
+        assert!(is_valid); // 验证应该成功
         
         Ok(())
     }
@@ -35,6 +51,10 @@ fn test_basic_trusted_party() {
     basic_trusted_party_example().unwrap();
 }
 
+/// 测试可信第三方的自定义配置功能
+/// 
+/// 目的：验证可信第三方生成器能够使用自定义配置参数
+/// 预期：自定义配置应该生效，生成的三元组应该通过验证
 #[test]
 fn test_trusted_party_configuration() {
     use mpc_api::{
@@ -47,13 +67,15 @@ fn test_trusted_party_configuration() {
         let threshold = 3;
         let party_id = 0;
         
+        // 创建自定义配置，启用高级特性
         let custom_config = TrustedPartyConfig {
-            enable_precomputation: true,
-            pool_size: 50,
-            batch_size: 20,
-            enable_security_checks: true,
+            enable_precomputation: true,  // 启用预计算
+            pool_size: 50,               // 三元组池大小
+            batch_size: 20,              // 批处理大小
+            enable_security_checks: true, // 启用安全检查
         };
         
+        // 使用自定义配置创建生成器
         let mut tp_generator = TrustedPartyBeaverGenerator::new(
             party_count,
             threshold, 
@@ -61,9 +83,11 @@ fn test_trusted_party_configuration() {
             Some(custom_config)
         )?;
         
+        // 生成多个三元组测试配置效果
         let triple1 = tp_generator.generate_single()?;
         let triple2 = tp_generator.generate_single()?;
         
+        // 验证两个三元组都应该有效
         assert!(tp_generator.verify_triple(&triple1)?);
         assert!(tp_generator.verify_triple(&triple2)?);
         
@@ -131,6 +155,10 @@ fn test_trusted_party_audit() {
     trusted_party_audit_example().unwrap();
 }
 
+/// 测试多方协作计算场景（市场满意度加权平均）
+/// 
+/// 目的：演示如何使用MPC计算多个公司的市场满意度加权平均值
+/// 预期：能够正确计算加权平均值，同时保护各公司的私人数据
 #[test]
 fn test_multi_party_collaboration() {
     use mpc_api::{
@@ -139,25 +167,28 @@ fn test_multi_party_collaboration() {
     };
 
     fn multi_party_collaboration_example() -> Result<()> {
-        let party_count = 4;
-        let threshold = 3;
+        let _party_count = 4;
+        let _threshold = 3;
         
+        // 模拟四家公司的数据：(市场满意度, 市场份额)
         let company_data = vec![
-            (85u64, 25u64),  
-            (78u64, 30u64),  
-            (92u64, 20u64),  
-            (88u64, 25u64),  
+            (85u64, 25u64),  // 公司A: 满意度85%, 份额25%
+            (78u64, 30u64),  // 公司B: 满意度78%, 份额30%
+            (92u64, 20u64),  // 公司C: 满意度92%, 份额20%
+            (88u64, 25u64),  // 公司D: 满意度88%, 份额25%
         ];
         
+        // 计算期望的加权总分：∑(满意度 * 份额)
         let expected_total = company_data.iter()
             .map(|(satisfaction, share)| field_mul(*satisfaction, *share))
             .fold(0u64, |acc, weighted| field_add(acc, weighted));
         
-        // Simplified test - just verify computation logic
+        // 简化测试 - 验证计算逻辑的正确性
         let computed_total = company_data.iter()
             .map(|(satisfaction, share)| field_mul(*satisfaction, *share))
             .fold(0u64, |acc, weighted| field_add(acc, weighted));
         
+        // 计算结果应该一致
         assert_eq!(computed_total, expected_total);
         
         Ok(())
@@ -167,27 +198,35 @@ fn test_multi_party_collaboration() {
 }
 
 // ===== Working Advanced Protocols Tests =====
+// 高级协议示例测试，包括承诺方案、认证和加密原语
 
+/// 测试Hash承诺示例的完整流程
+/// 
+/// 目的：验证Hash承诺在实际应用中的使用，包括单个和批量操作
+/// 预期：单个和批量承诺都应该能够正确生成和验证
 #[test]
 fn test_hash_commitment_examples() {
     use mpc_api::{commitment::HashCommitment, Result};
 
     fn run_all() -> Result<()> {
+        // 测试单个Hash承诺
         let secret_value = 42u64;
         let randomness = 123456u64;
         
         let commitment = HashCommitment::commit_u64(secret_value, randomness);
         let is_valid = HashCommitment::verify_u64(&commitment, secret_value, randomness);
-        assert!(is_valid);
+        assert!(is_valid); // 验证应该成功
         
+        // 测试批量Hash承诺
         let values = vec![10u64, 20u64, 30u64];
         let randomness_vec = vec![111u64, 222u64, 333u64];
         
         let commitments = HashCommitment::batch_commit_u64(&values, &randomness_vec)?;
         
+        // 验证每个批量承诺
         for (i, (&value, &rand)) in values.iter().zip(randomness_vec.iter()).enumerate() {
             let is_valid = HashCommitment::verify_u64(&commitments[i], value, rand);
-            assert!(is_valid);
+            assert!(is_valid); // 每个承诺都应该有效
         }
         
         Ok(())
@@ -320,6 +359,10 @@ fn test_advanced_protocols_guide_hash_commitment_examples() {
 
 // ===== Working API Examples Tests =====
 
+/// 测试完整的Shamir秘密分享示例
+/// 
+/// 目的：验证Shamir秘密分享的完整流程，包括分享、重构和同态运算
+/// 预期：秘密分享和重构应该正确，同态运算应该保持正确性
 #[test]
 fn test_complete_shamir_example() {
     use mpc_api::{
@@ -328,14 +371,16 @@ fn test_complete_shamir_example() {
     };
 
     fn complete_shamir_example() -> Result<()> {
+        // 基本秘密分享和重构
         let secret = 123456u64;
-        let threshold = 3;
-        let total_parties = 5;
+        let threshold = 3;    // 重构所需的最少份额数
+        let total_parties = 5; // 总参与方数
         
         let shares = ShamirSecretSharing::share(&secret, threshold, total_parties)?;
         let reconstructed = ShamirSecretSharing::reconstruct(&shares[0..threshold], threshold)?;
-        assert_eq!(secret, reconstructed);
+        assert_eq!(secret, reconstructed); // 重构结果应该等于原始秘密
         
+        // 测试同态加法：分享的加法 = 加法的分享
         let secret2 = 654321u64;
         let shares2 = ShamirSecretSharing::share(&secret2, threshold, total_parties)?;
         
@@ -346,8 +391,9 @@ fn test_complete_shamir_example() {
         
         let sum = ShamirSecretSharing::reconstruct(&sum_shares[0..threshold], threshold)?;
         let expected_sum = field_add(secret, secret2);
-        assert_eq!(sum, expected_sum);
+        assert_eq!(sum, expected_sum); // 同态加法应该正确
         
+        // 测试标量乘法：Share(s) * k = Share(s * k)
         let scalar = 7u64;
         let scalar_shares: Vec<_> = shares.iter()
             .map(|s| ShamirSecretSharing::scalar_mul(s, &scalar))
@@ -355,7 +401,7 @@ fn test_complete_shamir_example() {
         
         let scalar_result = ShamirSecretSharing::reconstruct(&scalar_shares[0..threshold], threshold)?;
         let expected_scalar = field_mul(secret, scalar);
-        assert_eq!(scalar_result, expected_scalar);
+        assert_eq!(scalar_result, expected_scalar); // 标量乘法应该正确
         
         Ok(())
     }
@@ -561,9 +607,9 @@ fn test_basic_field_operations() {
         let a = 12345678901234567u64;
         let b = 98765432109876543u64;
         
-        let sum = field_add(a, b);
-        let diff = field_sub(a, b);
-        let product = field_mul(a, b);
+        let _sum = field_add(a, b);
+        let _diff = field_sub(a, b);
+        let _product = field_mul(a, b);
         
         if let Some(a_inv) = field_inv(a) {
             let should_be_one = field_mul(a, a_inv);
@@ -597,12 +643,12 @@ fn test_large_number_operations() {
         let expected_sum = FIELD_PRIME - 3;
         assert_eq!(sum, expected_sum);
         
-        let product = field_mul(large_a, large_b);
+        let _product = field_mul(large_a, large_b);
         
         // Test overflow handling
         let max_u64 = u64::MAX;
         let safe_in_field = max_u64 % FIELD_PRIME;
-        let safe_product = field_mul(safe_in_field, safe_in_field);
+        let _safe_product = field_mul(safe_in_field, safe_in_field);
         
         Ok(())
     }
@@ -782,7 +828,7 @@ fn test_authentication_guide() {
 #[test]
 fn test_field_operations_guide() {
     use mpc_api::{
-        secret_sharing::{field_add, field_mul, field_sub, field_inv, FIELD_PRIME},
+        secret_sharing::{field_add, field_mul, field_sub, field_inv},
         Result,
     };
 
@@ -791,9 +837,9 @@ fn test_field_operations_guide() {
         let b = 987654321u64;
         let c = 24681u64;
         
-        let sum = field_add(a, b);
-        let difference = field_sub(a, b);
-        let product = field_mul(a, b);
+        let _sum = field_add(a, b);
+        let _difference = field_sub(a, b);
+        let _product = field_mul(a, b);
         
         if let Some(a_inv) = field_inv(a) {
             let should_be_one = field_mul(a, a_inv);
@@ -897,7 +943,7 @@ fn test_application_examples() {
 #[test]
 fn test_complete_api_guide() {
     use mpc_api::{
-        secret_sharing::{ShamirSecretSharing, SecretSharing, AdditiveSecretSharing, field_add},
+        secret_sharing::{ShamirSecretSharing, SecretSharing},
         beaver_triples::{TrustedPartyBeaverGenerator, BeaverTripleGenerator},
         commitment::HashCommitment,
         authentication::HMAC,
@@ -1152,7 +1198,7 @@ fn test_basic_ole_beaver_example() {
         
         let mut ole_generator = OLEBeaverGenerator::new(party_count, threshold, party_id)?;
         let beaver_triple = ole_generator.generate_single()?;
-        let is_valid = ole_generator.verify_triple(&beaver_triple)?;
+        let _is_valid = ole_generator.verify_triple(&beaver_triple)?;
         
         if let Some((a, b, c)) = beaver_triple.original_values {
             assert_eq!(c, field_mul(a, b));
@@ -1326,7 +1372,7 @@ fn test_comprehensive_ole_example() {
 #[test]
 fn test_complete_api_guide_simplified() {
     use mpc_api::{
-        secret_sharing::{ShamirSecretSharing, SecretSharing, AdditiveSecretSharingScheme, AdditiveSecretSharing, field_add, field_mul},
+        secret_sharing::{ShamirSecretSharing, SecretSharing, AdditiveSecretSharing, field_mul},
         beaver_triples::{TrustedPartyBeaverGenerator, BeaverTripleGenerator, secure_multiply},
         commitment::{HashCommitment, MerkleTree},
         authentication::HMAC,
@@ -1457,15 +1503,15 @@ fn test_complete_api_guide_simplified() {
 
 #[test]
 fn test_field_operations_demo() {
-    use mpc_api::{secret_sharing::{field_add, field_sub, field_mul, field_inv, FIELD_PRIME}, Result};
+    use mpc_api::{secret_sharing::{field_add, field_sub, field_mul, field_inv}, Result};
 
     fn field_operations_demo() -> Result<()> {
         let a = 12345u64;
         let b = 67890u64;
         
-        let sum = field_add(a, b);
-        let difference = field_sub(a, b);
-        let product = field_mul(a, b);
+        let _sum = field_add(a, b);
+        let _difference = field_sub(a, b);
+        let _product = field_mul(a, b);
         
         if let Some(a_inv) = field_inv(a) {
             let should_be_one = field_mul(a, a_inv);
@@ -1746,15 +1792,15 @@ fn test_simple_hmac_demo() {
 
 #[test]
 fn test_simple_field_operations_demo() {
-    use mpc_api::{secret_sharing::{field_add, field_sub, field_mul, field_inv, FIELD_PRIME}, Result};
+    use mpc_api::{secret_sharing::{field_add, field_sub, field_mul, field_inv}, Result};
 
     fn field_operations_demo() -> Result<()> {
         let a = 123456789u64;
         let b = 987654321u64;
         
-        let sum = field_add(a, b);
-        let difference = field_sub(a, b);
-        let product = field_mul(a, b);
+        let _sum = field_add(a, b);
+        let _difference = field_sub(a, b);
+        let _product = field_mul(a, b);
         
         if let Some(a_inv) = field_inv(a) {
             let should_be_one = field_mul(a, a_inv);
@@ -1809,7 +1855,6 @@ fn test_simple_key_demo() {
 fn test_comprehensive_performance_comparison() {
     use mpc_api::{
         beaver_triples::{OLEBeaverGenerator, BFVBeaverGenerator, TrustedPartyBeaverGenerator, BeaverTripleGenerator},
-        secret_sharing::{ShamirSecretSharing, SecretSharing},
         Result,
     };
 
@@ -1849,7 +1894,7 @@ fn test_comprehensive_performance_comparison() {
 #[test] 
 fn test_joint_data_analysis_scenario() {
     use mpc_api::{
-        beaver_triples::{OLEBeaverGenerator, BFVBeaverGenerator, TrustedPartyBeaverGenerator, BeaverTripleGenerator, secure_multiply},
+        beaver_triples::{OLEBeaverGenerator, BeaverTripleGenerator, secure_multiply},
         secret_sharing::{ShamirSecretSharing, SecretSharing, field_mul, field_add},
         Result,
     };

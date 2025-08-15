@@ -35,7 +35,10 @@ impl ECDSA for ECDigitalSignature {
             }
             
             // Compute k^(-1) mod n
-            let k_inv = Self::mod_inverse(k, params.n)?;
+            let k_inv = match Self::mod_inverse(k, params.n) {
+                Ok(inv) => inv,
+                Err(_) => continue, // If no inverse exists, try with a new k
+            };
             
             // Compute s = k^(-1) * (hash + r * private_key) mod n
             let temp = (message_hash as u128 + ((r as u128 * private_key as u128) % params.n as u128)) % params.n as u128;
@@ -63,7 +66,10 @@ impl ECDSA for ECDigitalSignature {
         }
         
         // Compute w = s^(-1) mod n
-        let w = Self::mod_inverse(signature.s, params.n)?;
+        let w = match Self::mod_inverse(signature.s, params.n) {
+            Ok(inv) => inv,
+            Err(_) => return Ok(false), // If no inverse exists, signature is invalid
+        };
         
         // Compute u1 = hash * w mod n and u2 = r * w mod n
         let u1 = ((message_hash as u128 * w as u128) % params.n as u128) as u64;

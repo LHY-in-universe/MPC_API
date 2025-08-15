@@ -1,14 +1,81 @@
 //! # MPC API 完整使用指南 (可编译版本)
 //! 
-//! 本文档展示了 MPC API 中当前实际可用组件的使用方法，包括：
-//! 1. 秘密分享 (Secret Sharing) - ✅ 完全可用
-//! 2. Beaver 三元组 (Beaver Triples) - ✅ 完全可用
-//! 3. 承诺方案 (Commitment Schemes) - ✅ 完全可用
-//! 4. 消息认证码 (Message Authentication Codes) - ✅ 完全可用
-//! 5. 有限域运算 (Field Operations) - ✅ 完全可用
-//! 6. 混淆电路 (Garbled Circuits) - ⚠️ 基础功能可用
-//! 7. 综合应用场景 - ✅ 实际可用示例
-//!
+//! 本文档展示了 MPC API 中当前实际可用组件的使用方法，是学习安全多方计算的完整指南。
+//! 
+//! ## 🎯 学习目标
+//! 
+//! 通过本指南，您将学会：
+//! - 理解MPC的核心概念和应用场景
+//! - 掌握各种密码学原语的实际使用
+//! - 构建完整的安全多方计算协议
+//! - 避免常见的安全陷阱和实现错误
+//! 
+//! ## 📋 功能覆盖列表
+//! 
+//! ### ✅ 完全可用的核心功能：
+//! 
+//! #### 1. 秘密分享 (Secret Sharing)
+//! - **Shamir秘密分享**: 基于拉格朗日插值的门限方案
+//! - **加法秘密分享**: 高效的线性分享方案
+//! - **应用场景**: 分布式密钥管理、隐私保护投票、多方求和
+//! 
+//! #### 2. Beaver 三元组 (Beaver Triples)
+//! - **可信第三方生成**: 用于安全乘法的预处理三元组
+//! - **安全乘法协议**: 无需交互的乘法运算
+//! - **应用场景**: 隐私保护机器学习、安全统计计算
+//! 
+//! #### 3. 承诺方案 (Commitment Schemes)
+//! - **哈希承诺**: 基于单向函数的承诺方案
+//! - **Merkle树**: 用于批量承诺和证明的树状结构
+//! - **应用场景**: 密封拍卖、零知识证明、区块链
+//! 
+//! #### 4. 消息认证码 (Message Authentication Codes)
+//! - **HMAC**: 基于哈希的消息认证码
+//! - **应用场景**: 消息完整性验证、身份认证
+//! 
+//! #### 5. 有限域运算 (Field Operations)
+//! - **模运算**: 加法、乘法、减法、逆元
+//! - **域参数**: 大素数域 (2^61 - 1)
+//! - **应用场景**: 所有MPC协议的基础运算
+//! 
+//! ### ⚠️ 基础功能可用：
+//! 
+//! #### 6. 混淆电路 (Garbled Circuits)
+//! - **基础门电路**: AND、OR、XOR门的混淆
+//! - **电路评估**: 双方安全计算
+//! - **注意**: 仅限简单电路，复杂应用需要额外开发
+//! 
+//! ### 🔬 实际应用示例：
+//! 
+//! #### 7. 综合应用场景
+//! - **隐私保护拍卖**: 承诺方案 + 安全比较
+//! - **多方求和**: 秘密分享 + 同态运算
+//! - **分布式投票**: 承诺方案 + 消息认证
+//! 
+//! ## 🚀 快速开始
+//! 
+//! ```bash
+//! # 运行完整指南
+//! cargo run --example complete_api_usage_guide
+//! 
+//! # 运行特定模块的测试
+//! cargo test --example complete_api_usage_guide
+//! ```
+//! 
+//! ## 🔒 安全注意事项
+//! 
+//! - **随机数生成**: 使用密码学安全的随机数生成器
+//! - **参数选择**: 门限值和参与方数量的合理配置
+//! - **网络安全**: 实际部署中需要考虑通信安全
+//! - **侧信道攻击**: 注意时间和功耗分析攻击
+//! 
+//! ## 📚 相关资源
+//! 
+//! - [MPC基础理论](https://en.wikipedia.org/wiki/Secure_multi-party_computation)
+//! - [Shamir秘密分享](https://en.wikipedia.org/wiki/Shamir%27s_Secret_Sharing)
+//! - [Beaver三元组](https://link.springer.com/chapter/10.1007/3-540-46766-1_34)
+//! - [承诺方案](https://en.wikipedia.org/wiki/Commitment_scheme)
+//! 
 //! 注意：本版本只包含当前API中实际可用的功能，确保所有代码都能编译和运行
 
 use mpc_api::{
@@ -25,84 +92,263 @@ pub mod secret_sharing_guide {
     use super::*;
     
     /// Shamir 秘密分享基础用法
+    /// 
+    /// ## 🔬 算法原理
+    /// 
+    /// Shamir秘密分享基于拉格朗日插值多项式，核心思想是：
+    /// 1. **分享生成**: 构造一个 t-1 次多项式 f(x) = s + a₁x + a₂x² + ... + aₜ₋₁x^(t-1)
+    ///    其中 s 是秘密，aᵢ 是随机系数
+    /// 2. **分发分享**: 计算 f(1), f(2), ..., f(n) 作为各方的分享
+    /// 3. **秘密重构**: 使用任意 t 个点通过拉格朗日插值恢复 f(0) = s
+    /// 
+    /// ## 🔒 安全性质
+    /// 
+    /// - **完美秘密性**: t-1 个或更少的分享不会泄露关于秘密的任何信息
+    /// - **门限性**: 需要恰好 t 个分享才能重构秘密
+    /// - **容错性**: 可以容忍最多 n-t 个参与方的故障或缺席
+    /// 
+    /// ## 📊 参数选择指南
+    /// 
+    /// - **门限值 t**: 通常设为 ⌊n/2⌋ + 1 以获得拜占庭容错
+    /// - **参与方数 n**: 应大于门限值，推荐 n ≥ 2t - 1
+    /// - **域大小**: 使用大素数域确保统计安全性
+    /// 
+    /// ## 💡 实际应用
+    /// 
+    /// - **分布式密钥管理**: 保护加密密钥不被单点攻击
+    /// - **多方计算**: 作为更复杂MPC协议的基础组件
+    /// - **门限签名**: 需要多方授权的数字签名
     pub fn basic_shamir_sharing() -> Result<()> {
         println!("=== 1.1 Shamir 秘密分享基础用法 ===");
         
-        // 步骤1: 选择参数
-        let secret = 42u64;        // 要分享的秘密
-        let threshold = 3;         // 门限值：重构需要的最少分享数
-        let total_parties = 5;     // 总参与方数
+        // 步骤1: 选择协议参数
+        // 这些参数的选择直接影响安全性和效率
+        let secret = 42u64;        // 要保护的秘密值 (可以是密钥、密码等)
+        let threshold = 3;         // 门限值：重构秘密所需的最少分享数
+        let total_parties = 5;     // 参与方总数：将生成的分享数量
         
-        println!("秘密值: {}", secret);
-        println!("门限: {} (需要{}个分享来重构)", threshold, threshold);
-        println!("总参与方: {}", total_parties);
+        println!("🔐 协议参数配置:");
+        println!("  秘密值: {} (在实际应用中这是需要保护的敏感数据)", secret);
+        println!("  门限值: {} (需要{}个参与方合作才能重构秘密)", threshold, threshold);
+        println!("  参与方数: {} (总共{}方参与，可容忍{}方故障)", total_parties, total_parties, total_parties - threshold);
         
-        // 步骤2: 生成分享
+        // 验证参数的合理性
+        assert!(threshold <= total_parties, "门限值不能超过参与方总数");
+        assert!(threshold > 0, "门限值必须大于0");
+        println!("✓ 参数验证通过");
+        
+        // 步骤2: 生成秘密分享
+        // 内部会生成一个 (threshold-1) 次多项式，秘密作为常数项
+        println!("\n📊 生成秘密分享:");
         let shares = ShamirSecretSharing::share(&secret, threshold, total_parties)?;
         
-        println!("生成的分享:");
+        println!("生成的分享 (x, y) 代表多项式上的点:");
         for (i, share) in shares.iter().enumerate() {
-            println!("  参与方 {}: ({}, {})", i, share.x, share.y);
+            println!("  参与方 {}: 点({}, {}) [f({}) = {}]", 
+                     i + 1, share.x, share.y, share.x, share.y);
+        }
+        println!("💡 每个分享都是多项式 f(x) 上的一个点");
+        
+        // 步骤3: 秘密重构演示
+        // 使用拉格朗日插值从任意 threshold 个点恢复多项式的常数项
+        println!("\n🔧 秘密重构过程:");
+        println!("使用前{}个分享进行重构...", threshold);
+        
+        let reconstruction_shares = &shares[0..threshold];
+        println!("参与重构的分享:");
+        for (i, share) in reconstruction_shares.iter().enumerate() {
+            println!("  分享 {}: ({}, {})", i + 1, share.x, share.y);
         }
         
-        // 步骤3: 重构秘密 (使用任意threshold个分享)
-        let reconstructed = ShamirSecretSharing::reconstruct(&shares[0..threshold], threshold)?;
+        let reconstructed = ShamirSecretSharing::reconstruct(reconstruction_shares, threshold)?;
         
-        println!("重构的秘密: {}", reconstructed);
-        assert_eq!(secret, reconstructed);
+        println!("🎯 重构结果: {}", reconstructed);
+        println!("🔍 原始秘密: {}", secret);
+        assert_eq!(secret, reconstructed, "重构失败：结果不匹配原始秘密");
+        println!("✅ 重构成功！秘密完全恢复");
         
-        // 步骤4: 验证门限性质 (少于threshold个分享无法重构)
+        // 步骤4: 门限性质验证
+        // 证明少于门限数的分享无法重构秘密
+        println!("\n🛡️ 安全性验证 - 门限性质:");
         if threshold > 1 {
             let insufficient_shares = &shares[0..threshold-1];
-            // 这会失败因为分享数不够
-            if ShamirSecretSharing::reconstruct(insufficient_shares, threshold).is_err() {
-                println!("✓ 门限性质验证通过：{}个分享无法重构秘密", threshold-1);
+            println!("尝试用{}个分享重构秘密 (少于门限{})...", 
+                     insufficient_shares.len(), threshold);
+            
+            // 这应该失败，因为分享数量不足
+            match ShamirSecretSharing::reconstruct(insufficient_shares, threshold) {
+                Err(_) => {
+                    println!("✅ 门限性质验证通过：{}个分享无法重构秘密", threshold-1);
+                    println!("🔒 这证明了方案的安全性：攻击者即使获得{}个分享也无法恢复秘密", threshold-1);
+                },
+                Ok(wrong_secret) => {
+                    println!("⚠️  警告：重构应该失败但却成功了，得到错误结果: {}", wrong_secret);
+                    println!("这可能表明实现有问题或参数设置不当");
+                }
             }
         }
         
-        println!("✓ Shamir 秘密分享基础用法演示完成\n");
+        // 步骤5: 展示分享的独立性
+        println!("\n🔄 分享独立性验证:");
+        println!("使用不同的{}个分享组合进行重构...", threshold);
+        
+        // 尝试使用不同的分享组合
+        if total_parties >= threshold + 1 {
+            let alternative_shares = &shares[1..threshold+1]; // 使用第2到第(threshold+1)个分享
+            let reconstructed2 = ShamirSecretSharing::reconstruct(alternative_shares, threshold)?;
+            
+            println!("使用分享 2-{} 重构结果: {}", threshold + 1, reconstructed2);
+            assert_eq!(secret, reconstructed2, "不同分享组合的重构结果应该相同");
+            println!("✅ 分享独立性验证通过：任意{}个分享都能正确重构", threshold);
+        }
+        
+        println!("\n🎉 Shamir 秘密分享基础用法演示完成");
+        println!("💡 关键要点总结:");
+        println!("  1. 秘密被安全地分割成{}个分享", total_parties);
+        println!("  2. 任意{}个分享可以重构原始秘密", threshold);
+        println!("  3. 少于{}个分享无法获得秘密的任何信息", threshold);
+        println!("  4. 方案具有完美的安全性和容错性\n");
+        
         Ok(())
     }
     
-    /// 同态运算演示
+    /// 秘密分享同态运算演示
+    /// 
+    /// ## 🧮 同态运算原理
+    /// 
+    /// 同态运算允许直接在分享上进行计算，而无需重构秘密：
+    /// - **加法同态**: [a] + [b] = [a + b] (其中 [x] 表示 x 的分享)
+    /// - **标量乘法**: c × [a] = [c × a] (c 是公开常数)
+    /// - **线性组合**: α[a] + β[b] = [αa + βb]
+    /// 
+    /// ## 🔍 技术细节
+    /// 
+    /// 对于Shamir秘密分享，同态性基于多项式的线性性质：
+    /// - 如果 f(x) 分享秘密 a，g(x) 分享秘密 b
+    /// - 那么 f(x) + g(x) 分享秘密 a + b
+    /// - 而 c × f(x) 分享秘密 c × a
+    /// 
+    /// ## 💡 应用场景
+    /// 
+    /// - **隐私保护求和**: 多方计算总和而不泄露个人数据
+    /// - **安全投票**: 计算选票总数但保护个人选择隐私
+    /// - **金融计算**: 银行间计算而不暴露具体交易金额
+    /// - **统计分析**: 在保护隐私的前提下计算统计指标
     pub fn homomorphic_operations() -> Result<()> {
-        println!("=== 1.2 秘密分享同态运算 ===");
+        println!("=== 1.2 秘密分享同态运算演示 ===");
         
-        let secret1 = 15u64;
-        let secret2 = 25u64; 
-        let threshold = 2;
-        let parties = 3;
+        // 准备测试数据
+        let secret1 = 15u64;  // 第一个秘密值 (例如：Alice的投票)
+        let secret2 = 25u64;  // 第二个秘密值 (例如：Bob的投票)
+        let threshold = 2;    // 2-out-of-3 门限方案
+        let parties = 3;      // 3个参与方
         
-        // 分享两个秘密
+        println!("🔐 待计算的秘密数据:");
+        println!("  秘密值1 (Alice): {}", secret1);
+        println!("  秘密值2 (Bob): {}", secret2);
+        println!("  预期和: {}", field_add(secret1, secret2));
+        
+        // 步骤1: 生成秘密分享
+        println!("\n📊 生成秘密分享:");
         let shares1 = ShamirSecretSharing::share(&secret1, threshold, parties)?;
         let shares2 = ShamirSecretSharing::share(&secret2, threshold, parties)?;
         
-        println!("秘密1: {}, 秘密2: {}", secret1, secret2);
+        println!("秘密1的分享:");
+        for (i, share) in shares1.iter().enumerate() {
+            println!("  参与方{}: ({}, {})", i+1, share.x, share.y);
+        }
+        println!("秘密2的分享:");
+        for (i, share) in shares2.iter().enumerate() {
+            println!("  参与方{}: ({}, {})", i+1, share.x, share.y);
+        }
         
-        // 同态加法：分享相加
+        // 步骤2: 同态加法运算
+        // 每个参与方在本地将自己的两个分享相加
+        println!("\n➕ 同态加法运算:");
+        println!("各参与方在本地计算分享相加...");
+        
         let sum_shares: Vec<_> = shares1.iter().zip(shares2.iter())
-            .map(|(s1, s2)| <ShamirSecretSharing as AdditiveSecretSharing>::add_shares(s1, s2))
+            .enumerate()
+            .map(|(i, (s1, s2))| {
+                let result = <ShamirSecretSharing as AdditiveSecretSharing>::add_shares(s1, s2)?;
+                println!("  参与方{}: ({}, {}) + ({}, {}) = ({}, {})", 
+                         i+1, s1.x, s1.y, s2.x, s2.y, result.x, result.y);
+                Ok(result)
+            })
             .collect::<Result<Vec<_>>>()?;
         
+        // 步骤3: 重构和的结果
+        println!("\n🔧 重构加法结果:");
         let sum = ShamirSecretSharing::reconstruct(&sum_shares[0..threshold], threshold)?;
         let expected_sum = field_add(secret1, secret2);
         
-        println!("同态加法结果: {} (预期: {})", sum, expected_sum);
-        assert_eq!(sum, expected_sum);
+        println!("重构的和: {}", sum);
+        println!("预期的和: {}", expected_sum);
+        assert_eq!(sum, expected_sum, "同态加法结果不正确");
+        println!("✅ 同态加法验证成功: {} + {} = {}", secret1, secret2, sum);
         
-        // 标量乘法：秘密乘以公开值
-        let scalar = 3u64;
+        // 步骤4: 标量乘法运算
+        println!("\n✖️ 标量乘法运算:");
+        let scalar = 3u64;  // 公开的标量 (例如：权重系数)
+        println!("将秘密1乘以公开标量 {}", scalar);
+        
         let scalar_mul_shares: Vec<_> = shares1.iter()
-            .map(|s| <ShamirSecretSharing as AdditiveSecretSharing>::scalar_mul(s, &scalar))
+            .enumerate()
+            .map(|(i, s)| {
+                let result = <ShamirSecretSharing as AdditiveSecretSharing>::scalar_mul(s, &scalar)?;
+                println!("  参与方{}: {} × ({}, {}) = ({}, {})", 
+                         i+1, scalar, s.x, s.y, result.x, result.y);
+                Ok(result)
+            })
             .collect::<Result<Vec<_>>>()?;
         
+        // 步骤5: 重构标量乘法结果
+        println!("\n🔧 重构标量乘法结果:");
         let scalar_result = ShamirSecretSharing::reconstruct(&scalar_mul_shares[0..threshold], threshold)?;
         let expected_scalar = field_mul(secret1, scalar);
         
-        println!("标量乘法 {} × {} = {} (预期: {})", secret1, scalar, scalar_result, expected_scalar);
-        assert_eq!(scalar_result, expected_scalar);
+        println!("重构的积: {}", scalar_result);
+        println!("预期的积: {}", expected_scalar);
+        assert_eq!(scalar_result, expected_scalar, "标量乘法结果不正确");
+        println!("✅ 标量乘法验证成功: {} × {} = {}", secret1, scalar, scalar_result);
         
-        println!("✓ 同态运算演示完成\n");
+        // 步骤6: 复合运算演示
+        println!("\n🔗 复合运算演示 - 线性组合:");
+        let alpha = 2u64;  // 第一个系数
+        let beta = 3u64;   // 第二个系数
+        println!("计算线性组合: {}×秘密1 + {}×秘密2", alpha, beta);
+        
+        // 计算 alpha * shares1 + beta * shares2
+        let combo_shares: Vec<_> = shares1.iter().zip(shares2.iter())
+            .enumerate()
+            .map(|(i, (s1, s2))| {
+                // alpha * s1
+                let alpha_s1 = <ShamirSecretSharing as AdditiveSecretSharing>::scalar_mul(s1, &alpha)?;
+                // beta * s2  
+                let beta_s2 = <ShamirSecretSharing as AdditiveSecretSharing>::scalar_mul(s2, &beta)?;
+                // alpha * s1 + beta * s2
+                let result = <ShamirSecretSharing as AdditiveSecretSharing>::add_shares(&alpha_s1, &beta_s2)?;
+                println!("  参与方{}: {}×({},{}) + {}×({},{}) = ({},{})", 
+                         i+1, alpha, s1.x, s1.y, beta, s2.x, s2.y, result.x, result.y);
+                Ok(result)
+            })
+            .collect::<Result<Vec<_>>>()?;
+        
+        let combo_result = ShamirSecretSharing::reconstruct(&combo_shares[0..threshold], threshold)?;
+        let expected_combo = field_add(field_mul(alpha, secret1), field_mul(beta, secret2));
+        
+        println!("线性组合结果: {}", combo_result);
+        println!("预期结果: {}×{} + {}×{} = {}", alpha, secret1, beta, secret2, expected_combo);
+        assert_eq!(combo_result, expected_combo, "线性组合结果不正确");
+        println!("✅ 线性组合验证成功");
+        
+        println!("\n🎉 同态运算演示完成");
+        println!("💡 关键优势:");
+        println!("  1. 计算过程中秘密始终保持分享状态");
+        println!("  2. 各参与方只需本地计算，无需额外通信");
+        println!("  3. 支持任意线性运算的组合");
+        println!("  4. 保持原有的门限安全性质\n");
+        
         Ok(())
     }
     

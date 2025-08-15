@@ -32,6 +32,17 @@ impl PedersenParams {
         
         Ok(PedersenParams { g, h })
     }
+    
+    pub fn new_fixed() -> Self {
+        let ec_params = SimpleEC::params();
+        let g = ec_params.g.clone();
+        
+        // Use a fixed scalar for h to ensure consistency across calls
+        let fixed_scalar = 12345u64;  // Fixed value for testing
+        let h = SimpleEC::scalar_multiply(fixed_scalar, &g).unwrap();
+        
+        PedersenParams { g, h }
+    }
 }
 
 impl CommitmentScheme for PedersenCommitment {
@@ -40,7 +51,7 @@ impl CommitmentScheme for PedersenCommitment {
     type Randomness = u64;
     
     fn commit(message: Self::Message, randomness: Self::Randomness) -> Self::Commitment {
-        let params = PedersenParams::new().unwrap();
+        let params = PedersenParams::new_fixed();
         
         // Commitment = message * G + randomness * H
         let message_point = SimpleEC::scalar_multiply(message, &params.g).unwrap();

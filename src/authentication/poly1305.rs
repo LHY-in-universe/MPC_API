@@ -92,12 +92,13 @@ impl Poly1305 {
             
             let block_value = Self::bytes_to_u128(&block[..16]);
             
-            // Add to accumulator and multiply by r
-            accumulator = ((accumulator + block_value) % POLY1305_PRIME * r_value) % POLY1305_PRIME;
+            // Add to accumulator and multiply by r (avoid overflow)
+            accumulator = (accumulator + block_value) % POLY1305_PRIME;
+            accumulator = (accumulator as u128).wrapping_mul(r_value as u128) % POLY1305_PRIME;
         }
         
-        // Add s and reduce to get final tag  
-        let final_value = (accumulator + s_value) % (u128::MAX);
+        // Add s and reduce to get final tag (avoid overflow)
+        let final_value = accumulator.wrapping_add(s_value) % (u128::MAX);
         Self::u128_to_bytes(final_value)
     }
     

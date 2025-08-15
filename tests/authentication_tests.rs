@@ -1,66 +1,110 @@
 //! 认证模块测试
 //! 
-//! 包含 HMAC, CMAC, GMAC, Poly1305 等认证算法的测试
+//! 本文件包含对MPC API认证模块的全面测试，覆盖以下认证算法：
+//! - HMAC (Hash-based Message Authentication Code) - 基于哈希的消息认证码
+//! - CMAC (Cipher-based Message Authentication Code) - 基于密码的消息认证码  
+//! - GMAC (Galois Message Authentication Code) - 伽罗华消息认证码
+//! - Poly1305 - 高性能消息认证码
+//! 
+//! 每个算法都测试了密钥生成、认证、验证、错误检测等核心功能。
 
-use mpc_api::authentication::{MessageAuthenticationCode, HMAC, HmacTag, HmacKey, CMAC, CmacTag, CmacKey, GMAC, GmacTag, GmacKey, Poly1305, Poly1305Tag, Poly1305Key};
+use mpc_api::authentication::{MessageAuthenticationCode, HMAC, HmacTag, CMAC, GMAC, Poly1305};
 
 // ===== HMAC Tests =====
+// HMAC是基于哈希函数的消息认证码，广泛用于验证消息完整性和真实性
 
+/// 测试HMAC密钥生成功能
+/// 
+/// 目的：验证HMAC能够生成随机的、不同的密钥
+/// 预期：每次生成的密钥都应该不同，确保安全性
 #[test]
 fn test_hmac_generate_key() {
     let key1 = HMAC::generate_key();
     let key2 = HMAC::generate_key();
     
+    // 验证两次生成的密钥不相同，确保随机性
     assert_ne!(key1.key, key2.key);
 }
 
+/// 测试HMAC基本认证和验证流程
+/// 
+/// 目的：验证HMAC的完整认证流程：生成标签 -> 验证标签
+/// 预期：使用相同密钥和消息生成的标签应该能够通过验证
 #[test]
 fn test_hmac_authenticate_and_verify() {
     let key = HMAC::generate_key();
     let message = b"Hello, HMAC!".to_vec();
     
+    // 使用密钥对消息生成认证标签
     let tag = HMAC::authenticate(&key, &message);
+    // 验证标签的正确性
     let verification = HMAC::verify(&key, &message, &tag);
     
+    // 验证应该成功
     assert!(verification);
 }
 
+/// 测试HMAC使用错误密钥验证的安全性
+/// 
+/// 目的：验证HMAC能够正确拒绝使用不同密钥进行的验证
+/// 预期：使用不同密钥验证相同消息和标签时应该失败
 #[test]
 fn test_hmac_wrong_key() {
     let key1 = HMAC::generate_key();
     let key2 = HMAC::generate_key();
     let message = b"Hello, HMAC!".to_vec();
     
+    // 使用第一个密钥生成标签
     let tag = HMAC::authenticate(&key1, &message);
+    // 尝试使用第二个密钥验证 - 应该失败
     let verification = HMAC::verify(&key2, &message, &tag);
     
+    // 验证应该失败，确保密钥安全性
     assert!(!verification);
 }
 
+/// 测试HMAC消息完整性检测能力
+/// 
+/// 目的：验证HMAC能够检测到消息被篡改
+/// 预期：对不同消息使用相同标签验证时应该失败
 #[test]
 fn test_hmac_wrong_message() {
     let key = HMAC::generate_key();
     let message1 = b"Hello, HMAC!".to_vec();
     let message2 = b"Hello, MAC!".to_vec();
     
+    // 为第一个消息生成标签
     let tag = HMAC::authenticate(&key, &message1);
+    // 尝试用该标签验证第二个消息 - 应该失败
     let verification = HMAC::verify(&key, &message2, &tag);
     
+    // 验证应该失败，确保消息完整性
     assert!(!verification);
 }
 
+/// 测试HMAC对64位无符号整数的专用认证功能
+/// 
+/// 目的：验证HMAC能够直接对u64类型数据进行认证和验证
+/// 预期：64位整数的认证和验证应该成功
 #[test]
 fn test_hmac_u64() {
     let key = HMAC::generate_key();
     let value = 12345u64;
     
+    // 计算u64值的HMAC标签
     let tag_bytes = HMAC::compute_hmac_u64(&key.key, value);
     let tag = HmacTag { tag: tag_bytes };
+    // 验证u64值的HMAC标签
     let verification = HMAC::verify_u64(&key, value, &tag);
     
+    // 验证应该成功
     assert!(verification);
 }
 
+/// 测试HMAC批量操作功能
+/// 
+/// 目的：验证HMAC能够高效地批量处理多个消息的认证和验证
+/// 预期：批量认证应该生成正确数量的标签，批量验证应该成功
 #[test]
 fn test_hmac_batch_operations() {
     let key = HMAC::generate_key();
@@ -70,147 +114,225 @@ fn test_hmac_batch_operations() {
         b"message3".to_vec(),
     ];
     
+    // 批量生成认证标签
     let tags = HMAC::batch_authenticate(&key, &messages);
-    assert_eq!(tags.len(), 3);
+    assert_eq!(tags.len(), 3); // 确保生成了正确数量的标签
     
+    // 批量验证所有标签
     let verification = HMAC::batch_verify(&key, &messages, &tags).unwrap();
-    assert!(verification);
+    assert!(verification); // 所有验证都应该成功
 }
 
+/// 测试HMAC在秘密分享中的应用
+/// 
+/// 目的：验证HMAC能够对秘密分享的份额进行认证
+/// 预期：份额认证和验证应该成功，确保分享数据的完整性
 #[test]
 fn test_hmac_authenticate_share() {
     let key = HMAC::generate_key();
     let share_value = 123u64;
     let share_index = 0usize;
     
+    // 对秘密分享份额进行认证
     let tag = HMAC::authenticate_share(&key, share_value, share_index);
+    // 验证份额的完整性
     let verification = HMAC::verify_share(&key, share_value, share_index, &tag);
     
+    // 验证应该成功
     assert!(verification);
 }
 
+/// 测试HMAC基于密钥派生功能（HKDF）
+/// 
+/// 目的：验证HMAC能够从主密钥派生出确定性的子密钥
+/// 预期：相同输入应产生相同的派生密钥，且长度正确
 #[test]
 fn test_hmac_key_derivation() {
     let master_key = b"master_secret_key";
-    let info = b"application_context";
-    let length = 32;
+    let info = b"application_context"; // 上下文信息
+    let length = 32; // 期望的密钥长度
     
+    // 两次派生相同参数的密钥
     let derived_key1 = HMAC::derive_key(master_key, info, length);
     let derived_key2 = HMAC::derive_key(master_key, info, length);
     
+    // 派生结果应该一致且长度正确
     assert_eq!(derived_key1, derived_key2);
     assert_eq!(derived_key1.len(), length);
 }
 
+/// 测试HMAC密钥拉伸功能（PBKDF2）
+/// 
+/// 目的：验证HMAC能够通过迭代计算将弱密码转换为强密钥
+/// 预期：相同输入产生相同密钥，不同盐产生不同密钥
 #[test]
 fn test_hmac_key_stretching() {
     let password = b"weak_password";
     let salt = b"random_salt";
-    let iterations = 1000;
+    let iterations = 1000; // 迭代次数增加计算强度
     
+    // 两次拉伸相同参数
     let stretched_key1 = HMAC::stretch_key(password, salt, iterations);
     let stretched_key2 = HMAC::stretch_key(password, salt, iterations);
     
+    // 相同输入应产生相同结果
     assert_eq!(stretched_key1.key, stretched_key2.key);
     
-    // Different salt should produce different key
+    // 不同盐应产生不同密钥（防止彩虹表攻击）
     let different_salt = b"different_salt";
     let stretched_key3 = HMAC::stretch_key(password, different_salt, iterations);
     assert_ne!(stretched_key1.key, stretched_key3.key);
 }
 
+/// 测试HMAC安全比较功能（防止时序攻击）
+/// 
+/// 目的：验证HMAC提供的常时间比较功能能防止时序攻击
+/// 预期：相同数据返回true，不同数据或长度返回false
 #[test]
 fn test_hmac_secure_compare() {
     let a = [1, 2, 3, 4, 5];
     let b = [1, 2, 3, 4, 5];
     let c = [1, 2, 3, 4, 6];
     
+    // 相同数据应该返回true
     assert!(HMAC::secure_compare(&a, &b));
+    // 不同数据应该返回false
     assert!(!HMAC::secure_compare(&a, &c));
-    assert!(!HMAC::secure_compare(&a, &[1, 2, 3, 4])); // Different lengths
+    // 不同长度应该返回false
+    assert!(!HMAC::secure_compare(&a, &[1, 2, 3, 4]));
 }
 
+/// 测试HMAC标准测试向量（基于RFC 2202）
+/// 
+/// 目的：验证HMAC实现符合标准规范
+/// 预期：使用标准测试向量应产生正确长度和确定性的标签
 #[test]
 fn test_hmac_test_vectors() {
     // RFC 2202 test vectors (simplified)
     let key = b"Jefe";
     let message = b"what do ya want for nothing?";
     
+    // 计算HMAC标签
     let tag = HMAC::compute_hmac(key, message);
-    assert_eq!(tag.len(), 32);
+    assert_eq!(tag.len(), 32); // 验证标签长度
     
-    // The tag should be deterministic
+    // 标签应该是确定性的（相同输入产生相同输出）
     let tag2 = HMAC::compute_hmac(key, message);
     assert_eq!(tag, tag2);
 }
 
 // ===== CMAC Tests =====
+// CMAC是基于分组密码（如AES）的消息认证码，提供与HMAC类似的安全性
 
+/// 测试CMAC密钥生成功能
+/// 
+/// 目的：验证CMAC能够生成随机的、不同的密钥
+/// 预期：每次生成的密钥都应该不同，确保安全性
 #[test]
 fn test_cmac_generate_key() {
     let key1 = CMAC::generate_key();
     let key2 = CMAC::generate_key();
     
+    // 验证两次生成的密钥不相同，确保随机性
     assert_ne!(key1.key, key2.key);
 }
 
+/// 测试CMAC基本认证和验证流程
+/// 
+/// 目的：验证CMAC的完整认证流程：生成标签 -> 验证标签
+/// 预期：使用相同密钥和消息生成的标签应该能够通过验证
 #[test]
 fn test_cmac_authenticate_and_verify() {
     let key = CMAC::generate_key();
     let message = b"Hello, CMAC!".to_vec();
     
+    // 使用密钥对消息生成认证标签
     let tag = CMAC::authenticate(&key, &message);
+    // 验证标签的正确性
     let verification = CMAC::verify(&key, &message, &tag);
     
+    // 验证应该成功
     assert!(verification);
 }
 
+/// 测试CMAC使用错误密钥验证的安全性
+/// 
+/// 目的：验证CMAC能够正确拒绝使用不同密钥进行的验证
+/// 预期：使用不同密钥验证相同消息和标签时应该失败
 #[test]
 fn test_cmac_wrong_key() {
     let key1 = CMAC::generate_key();
     let key2 = CMAC::generate_key();
     let message = b"Hello, CMAC!".to_vec();
     
+    // 使用第一个密钥生成标签
     let tag = CMAC::authenticate(&key1, &message);
+    // 尝试使用第二个密钥验证 - 应该失败
     let verification = CMAC::verify(&key2, &message, &tag);
     
+    // 验证应该失败，确保密钥安全性
     assert!(!verification);
 }
 
+/// 测试CMAC消息完整性检测能力
+/// 
+/// 目的：验证CMAC能够检测到消息被篡改
+/// 预期：对不同消息使用相同标签验证时应该失败
 #[test]
 fn test_cmac_wrong_message() {
     let key = CMAC::generate_key();
     let message1 = b"Hello, CMAC!".to_vec();
     let message2 = b"Hello, MAC!".to_vec();
     
+    // 为第一个消息生成标签
     let tag = CMAC::authenticate(&key, &message1);
+    // 尝试用该标签验证第二个消息 - 应该失败
     let verification = CMAC::verify(&key, &message2, &tag);
     
+    // 验证应该失败，确保消息完整性
     assert!(!verification);
 }
 
+/// 测试CMAC处理空消息的能力
+/// 
+/// 目的：验证CMAC能够正确处理长度为零的消息
+/// 预期：空消息的认证和验证应该成功
 #[test]
 fn test_cmac_empty_message() {
     let key = CMAC::generate_key();
     let empty_message = Vec::new();
     
+    // 对空消息生成认证标签
     let tag = CMAC::authenticate(&key, &empty_message);
+    // 验证空消息的标签
     let verification = CMAC::verify(&key, &empty_message, &tag);
     
+    // 验证应该成功
     assert!(verification);
 }
 
+/// 测试CMAC对有限域元素的专用认证功能
+/// 
+/// 目的：验证CMAC能够直接对有限域中的数值进行认证
+/// 预期：有限域元素的认证和验证应该成功
 #[test]
 fn test_cmac_field_element() {
     let key = CMAC::generate_key();
     let value = 12345u64;
     
+    // 对有限域元素生成认证标签
     let tag = CMAC::authenticate_field_element(&key, value);
+    // 验证有限域元素的标签
     let verification = CMAC::verify_field_element(&key, value, &tag);
     
+    // 验证应该成功
     assert!(verification);
 }
 
+/// 测试CMAC批量操作功能
+/// 
+/// 目的：验证CMAC能够高效地批量处理多个消息的认证和验证
+/// 预期：批量认证应该生成正确数量的标签，批量验证应该成功
 #[test]
 fn test_cmac_batch_operations() {
     let key = CMAC::generate_key();
@@ -220,34 +342,46 @@ fn test_cmac_batch_operations() {
         b"message3".to_vec(),
     ];
     
+    // 批量生成认证标签
     let tags = CMAC::batch_authenticate(&key, &messages);
-    assert_eq!(tags.len(), 3);
+    assert_eq!(tags.len(), 3); // 确保生成了正确数量的标签
     
+    // 批量验证所有标签
     let verification = CMAC::batch_verify(&key, &messages, &tags).unwrap();
-    assert!(verification);
+    assert!(verification); // 所有验证都应该成功
 }
 
+/// 测试CMAC子密钥生成算法
+/// 
+/// 目的：验证CMAC子密钥生成算法的正确性
+/// 预期：子密钥K1和K2应该与原密钥不同，且彼此不同
 #[test]
 fn test_cmac_subkey_generation() {
     let key = [0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6,
                0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c];
     
+    // 生成CMAC子密钥K1和K2
     let (k1, k2) = CMAC::generate_subkeys(&key);
     
-    // Subkeys should be different from the original key
+    // 子密钥应该与原密钥不同，确保安全性
     assert_ne!(k1, key);
     assert_ne!(k2, key);
-    assert_ne!(k1, k2);
+    assert_ne!(k1, k2); // K1和K2也应该不同
 }
 
+/// 测试CMAC左移位算法
+/// 
+/// 目的：验证CMAC的左移位操作，这是子密钥生成中的关键步骤
+/// 预期：当最高位为1时，左移后应与0x87进行异或
 #[test]
 fn test_cmac_left_shift() {
     let input = [0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
     
+    // 执行左移位操作
     let shifted = CMAC::left_shift(&input);
     
-    // MSB was 1, so result should have been XORed with 0x87
+    // 由于最高位(MSB)为1，左移后应与0x87异或
     assert_eq!(shifted[15], 0x87);
 }
 
@@ -316,24 +450,37 @@ fn test_cmac_different_length_messages() {
 }
 
 // ===== GMAC Tests =====
+// GMAC是伽罗华消息认证码，基于有限域运算，常与AES-GCM模式一起使用
 
+/// 测试GMAC密钥生成功能
+/// 
+/// 目的：验证GMAC能够生成随机的、不同的密钥对(h,k)
+/// 预期：每次生成的密钥对都应该不同，确保安全性
 #[test]
 fn test_gmac_generate_key() {
     let key1 = GMAC::generate_key();
     let key2 = GMAC::generate_key();
     
+    // 验证两次生成的密钥对不相同，确保随机性
     assert_ne!(key1.h, key2.h);
     assert_ne!(key1.k, key2.k);
 }
 
+/// 测试GMAC基本认证和验证流程
+/// 
+/// 目的：验证GMAC的完整认证流程：生成标签 -> 验证标签
+/// 预期：使用相同密钥和消息生成的标签应该能够通过验证
 #[test]
 fn test_gmac_authenticate_and_verify() {
     let key = GMAC::generate_key();
     let message = b"Hello, GMAC!".to_vec();
     
+    // 使用密钥对消息生成认证标签
     let tag = GMAC::authenticate(&key, &message);
+    // 验证标签的正确性
     let verification = GMAC::verify(&key, &message, &tag);
     
+    // 验证应该成功
     assert!(verification);
 }
 
@@ -361,6 +508,10 @@ fn test_gmac_wrong_message() {
     assert!(!verification);
 }
 
+/// 测试GF(2^128)有限域乘法运算
+/// 
+/// 目的：验证GMAC中使用的伽罗华域乘法运算的正确性
+/// 预期：乘法应该满足交换律、单位元性质和零元性质
 #[test]
 fn test_gf128_multiplication() {
     let a = 0x123456789abcdef0fedcba9876543210u128;
@@ -368,15 +519,15 @@ fn test_gf128_multiplication() {
     
     let result = GMAC::gf128_mul(a, b);
     
-    // Multiplication should be commutative
+    // 乘法应该满足交换律：a*b = b*a
     let result2 = GMAC::gf128_mul(b, a);
     assert_eq!(result, result2);
     
-    // Multiplication by 1 should be identity
+    // 乘以1应该是单位元：a*1 = a
     let identity = GMAC::gf128_mul(a, 1);
     assert_eq!(identity, a);
     
-    // Multiplication by 0 should be 0
+    // 乘以0应该是零元：a*0 = 0
     let zero = GMAC::gf128_mul(a, 0);
     assert_eq!(zero, 0);
 }
@@ -477,24 +628,37 @@ fn test_bytes_to_gf128_conversion() {
 }
 
 // ===== Poly1305 Tests =====
+// Poly1305是一种高性能消息认证码，由Daniel J. Bernstein设计
 
+/// 测试Poly1305密钥生成功能
+/// 
+/// 目的：验证Poly1305能够生成随机的、不同的密钥对(r,s)
+/// 预期：每次生成的密钥对都应该不同，确保安全性
 #[test]
 fn test_poly1305_generate_key() {
     let key1 = Poly1305::generate_key();
     let key2 = Poly1305::generate_key();
     
+    // 验证两次生成的密钥对不相同，确保随机性
     assert_ne!(key1.r, key2.r);
     assert_ne!(key1.s, key2.s);
 }
 
+/// 测试Poly1305基本认证和验证流程
+/// 
+/// 目的：验证Poly1305的完整认证流程：生成标签 -> 验证标签
+/// 预期：使用相同密钥和消息生成的标签应该能够通过验证
 #[test]
 fn test_poly1305_authenticate_and_verify() {
     let key = Poly1305::generate_key();
     let message = b"Hello, Poly1305!".to_vec();
     
+    // 使用密钥对消息生成认证标签
     let tag = Poly1305::authenticate(&key, &message);
+    // 验证标签的正确性
     let verification = Poly1305::verify(&key, &message, &tag);
     
+    // 验证应该成功
     assert!(verification);
 }
 
@@ -573,7 +737,7 @@ fn test_poly1305_incremental() {
 #[test]
 fn test_poly1305_one_time_key() {
     let master_key = b"0123456789abcdef0123456789abcdef";
-    let nonce = b"nonce1234567890";
+    let nonce = b"nonce1234567890x"; // 16 bytes
     
     let key1 = Poly1305::generate_one_time_key(master_key, nonce).unwrap();
     let key2 = Poly1305::generate_one_time_key(master_key, nonce).unwrap();

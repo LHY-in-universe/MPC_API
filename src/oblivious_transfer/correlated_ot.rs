@@ -148,6 +148,7 @@ impl AdditiveShareOT {
 // Boolean correlated OT for XOR shares
 #[derive(Debug, Clone)]
 pub struct BooleanCorrelatedOT {
+    #[allow(dead_code)]
     inner: CorrelatedOT,
 }
 

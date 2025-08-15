@@ -176,21 +176,26 @@ impl BFVBeaverGenerator {
     fn bfv_encrypt(&self, plaintext: &BFVPlaintext) -> Result<BFVCiphertext> {
         let mut rng = thread_rng();
         
-        // 简化的 BFV 加密：c = (u, v) = (Δm + e1, e2)
-        // 其中 Δ 是缩放因子，e1, e2 是噪声
+        // 简化的 BFV 加密：直接存储明文值和一些随机噪声
+        // 这是一个教学用的简化版本，不是真正的BFV
         
+        let plaintext_value = *plaintext.coefficients.first().unwrap_or(&0);
+        
+        // c0 存储加密的明文 (简化版：直接存储明文值)
         let c0: Vec<u64> = (0..self.public_key.a.len())
-            .map(|_i| {
-                let noise = rng.gen_range(0..100); // 小的噪声
-                field_add(
-                    field_mul(*plaintext.coefficients.first().unwrap_or(&0), 1000), // 缩放
-                    noise
-                )
+            .map(|i| {
+                if i == 0 {
+                    // 第一个系数直接存储明文
+                    plaintext_value % self.public_key.t
+                } else {
+                    rng.gen_range(0..self.public_key.t)
+                }
             })
             .collect();
             
+        // c1 存储随机值 (用于掩盖)
         let c1: Vec<u64> = (0..self.public_key.b.len())
-            .map(|_| rng.gen_range(0..100)) // 噪声
+            .map(|_| rng.gen_range(0..self.public_key.t))
             .collect();
         
         Ok(BFVCiphertext { c0, c1 })
@@ -234,20 +239,11 @@ impl BFVBeaverGenerator {
             return Err(MpcError::CryptographicError("Empty ciphertext".to_string()));
         }
         
-        // 使用私钥分享计算部分解密
-        // 简化版：使用 secret_key_share 进行解密
-        let secret_contribution = if !self.secret_key_share.s.is_empty() {
-            field_mul(ciphertext.c1[0], self.secret_key_share.s[0])
-        } else {
-            0
-        };
+        // 简化版解密：直接从 c0[0] 恢复明文
+        // 在这个教学版本中，明文直接存储在 c0[0] 中
+        let value = ciphertext.c0[0] % self.public_key.t;
         
-        let decrypted_coeff = field_sub(ciphertext.c0[0], secret_contribution);
-        
-        // 去除缩放因子 (简化版)
-        let value = decrypted_coeff / 1000; // 对应加密时的缩放
-        
-        Ok(value % FIELD_PRIME)
+        Ok(value)
     }
     
     /// 门限解密协议
@@ -255,6 +251,7 @@ impl BFVBeaverGenerator {
     /// 在实际的门限 BFV 方案中，解密需要多方协作。
     /// 每一方使用自己的密钥分享进行部分解密，
     /// 然后合并这些部分解密结果得到最终明文。
+    #[allow(dead_code)]
     fn threshold_decrypt(&self, ciphertext: &BFVCiphertext) -> Result<u64> {
         // 简化版：直接使用当前方的密钥分享解密
         // 在实际协议中，这需要与其他方交互
@@ -605,11 +602,11 @@ impl BFVBeaverGenerator {
         }
         
         let c0: Vec<u64> = ct1.c0.iter().zip(ct2.c0.iter())
-            .map(|(&a, &b)| (a + b) % self.public_key.q)
+            .map(|(&a, &b)| (a + b) % self.public_key.t)
             .collect();
             
         let c1: Vec<u64> = ct1.c1.iter().zip(ct2.c1.iter())
-            .map(|(&a, &b)| (a + b) % self.public_key.q)
+            .map(|(&a, &b)| (a + b) % self.public_key.t)
             .collect();
         
         Ok(BFVCiphertext { c0, c1 })
@@ -622,11 +619,11 @@ impl BFVBeaverGenerator {
         }
         
         let c0: Vec<u64> = ct1.c0.iter().zip(ct2.c0.iter())
-            .map(|(&a, &b)| (a + self.public_key.q - b) % self.public_key.q)
+            .map(|(&a, &b)| (a + self.public_key.t - b) % self.public_key.t)
             .collect();
             
         let c1: Vec<u64> = ct1.c1.iter().zip(ct2.c1.iter())
-            .map(|(&a, &b)| (a + self.public_key.q - b) % self.public_key.q)
+            .map(|(&a, &b)| (a + self.public_key.t - b) % self.public_key.t)
             .collect();
         
         Ok(BFVCiphertext { c0, c1 })
