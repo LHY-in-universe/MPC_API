@@ -1,1 +1,140 @@
-/target
+# Rust 编译输出
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# IDE 配置文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统生成文件
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# 日志文件
+*.log
+logs/
+*.log.*
+
+# 临时文件
+*.tmp
+*.temp
+.cache/
+tmp/
+
+# 测试覆盖率报告
+tarpaulin-report.html
+coverage/
+lcov.info
+
+# 基准测试结果
+criterion/
+target/criterion/
+
+# 文档生成
+docs/book/
+target/doc/
+
+# 环境配置文件
+.env
+.env.local
+.env.*.local
+
+# 密钥和证书文件
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+keys/
+certs/
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+
+# 配置文件（可能包含敏感信息）
+config.toml
+config.json
+settings.toml
+settings.json
+
+# 网络配置和证书
+network_config.toml
+peers.json
+node_keys/
+
+# MPC 协议相关敏感文件
+shares/
+private_keys/
+beaver_triples/
+protocol_state/
+
+# 性能测试结果
+benchmark_results/
+perf_data/
+
+# 调试文件
+debug/
+dumps/
+core.*
+
+# Rust analyzer
+.rust-analyzer/
+
+# 本地开发配置
+local_config/
+dev_settings/
+
+# 备份文件
+*.bak
+*.backup
+*_backup
+backup/
+
+# 编译器和链接器文件
+*.o
+*.a
+*.so
+*.dll
+*.dylib
+
+# 包管理器文件
+node_modules/
+npm-debug.log*
+
+# Python 相关（如果有 Python 工具）
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 其他语言的编译文件
+*.class
+*.jar

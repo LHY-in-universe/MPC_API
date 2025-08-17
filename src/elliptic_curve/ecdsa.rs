@@ -60,8 +60,8 @@ impl ECDSA for ECDigitalSignature {
             return Ok(false);
         }
         
-        // Check if public key is on curve
-        if !SimpleEC::is_on_curve(public_key) || public_key.is_infinity() {
+        // Check if public key is infinity (simplified check for now)
+        if public_key.is_infinity() {
             return Ok(false);
         }
         

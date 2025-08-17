@@ -344,3 +344,175 @@ impl AdditiveSecretSharing for ShamirSecretSharing {
     }
 }
 
+impl super::MultiplicationSecretSharing for ShamirSecretSharing {
+    /// Shamir 分享乘法
+    /// 
+    /// 计算两个 Shamir 分享的乘积。注意：这会导致多项式度数翻倍，
+    /// 因此结果分享需要 2t-1 个才能重构，而不是原来的 t 个。
+    /// 在实际应用中，通常需要度数降低协议。
+    /// 
+    /// # 参数
+    /// 
+    /// * `share1` - 第一个分享
+    /// * `share2` - 第二个分享
+    /// 
+    /// # 返回值
+    /// 
+    /// 返回乘积分享，注意度数已经翻倍
+    /// 
+    /// # 安全性
+    /// 
+    /// 该方法实现了 Shamir 分享的局部乘法，但结果分享的安全阈值变化了。
+    /// 如果原始分享是 (t,n) 方案，则乘积分享是 (2t-1,n) 方案。
+    fn mul_shares(share1: &Self::Share, share2: &Self::Share) -> Result<Self::Share> {
+        if share1.x != share2.x {
+            return Err(MpcError::InvalidSecretShare);
+        }
+        
+        let y = field_mul(share1.y, share2.y);
+        Ok(Share::new(share1.x, y))
+    }
+
+    /// Beaver 三元组乘法实现
+    /// 
+    /// 使用 Beaver 三元组实现安全的分享乘法，保持原有的阈值特性。
+    /// 该协议是 BGW 协议的核心组件。
+    /// 
+    /// # 参数
+    /// 
+    /// * `share_x` - 第一个要相乘的分享
+    /// * `share_y` - 第二个要相乘的分享
+    /// * `beaver_a` - Beaver 三元组中的 a 分享
+    /// * `beaver_b` - Beaver 三元组中的 b 分享
+    /// * `beaver_c` - Beaver 三元组中的 c 分享 (c = a * b)
+    /// * `d` - 公开值 d = x - a
+    /// * `e` - 公开值 e = y - b
+    /// 
+    /// # 返回值
+    /// 
+    /// 返回 x * y 的分享
+    /// 
+    /// # 协议详细
+    /// 
+    /// Beaver 乘法协议：
+    /// 1. 各方计算 d_i = x_i - a_i, e_i = y_i - b_i
+    /// 2. 重构并公开 d = Σd_i, e = Σe_i
+    /// 3. 各方计算 z_i = c_i + d·b_i + e·a_i + d·e (仅party 0计算最后一项)
+    fn beaver_mul(
+        share_x: &Self::Share,
+        share_y: &Self::Share,
+        beaver_a: &Self::Share,
+        beaver_b: &Self::Share,
+        beaver_c: &Self::Share,
+        d: &Self::Secret,
+        e: &Self::Secret,
+    ) -> Result<Self::Share> {
+        // 验证所有分享的 x 坐标一致
+        if share_x.x != share_y.x || 
+           share_x.x != beaver_a.x || 
+           share_x.x != beaver_b.x || 
+           share_x.x != beaver_c.x {
+            return Err(MpcError::InvalidSecretShare);
+        }
+
+        // 计算 z = c + d*b + e*a + d*e
+        // 注意：在实际协议中，d*e 项只有一个参与方（通常是 party 0）添加
+        let db = field_mul(*d, beaver_b.y);
+        let ea = field_mul(*e, beaver_a.y);
+        let de = if share_x.x == 1 { // 假设 party 0 对应 x=1
+            field_mul(*d, *e)
+        } else {
+            0
+        };
+        
+        let result_y = field_add(
+            field_add(beaver_c.y, db),
+            field_add(ea, de)
+        );
+        
+        Ok(Share::new(share_x.x, result_y))
+    }
+
+    /// 生成 Beaver 三元组
+    /// 
+    /// 生成随机的 Beaver 三元组 (a, b, c)，其中 c = a * b。
+    /// 在实际的 MPC 协议中，这通常在离线预处理阶段完成。
+    /// 
+    /// # 参数
+    /// 
+    /// * `threshold` - 重构阈值
+    /// * `total_parties` - 总参与方数量
+    /// 
+    /// # 返回值
+    /// 
+    /// 返回三个向量，分别包含所有参与方的 a、b、c 分享
+    /// 
+    /// # 安全性
+    /// 
+    /// 该方法生成的三元组满足 MPC 所需的随机性和正确性要求。
+    /// 在实际协议中，应当使用分布式的生成协议而不是可信方生成。
+    fn generate_beaver_triple(
+        threshold: usize,
+        total_parties: usize,
+    ) -> Result<(Vec<Self::Share>, Vec<Self::Share>, Vec<Self::Share>)> {
+        let mut rng = rand::thread_rng();
+        
+        // 生成随机的 a 和 b
+        let a: u64 = rng.gen_range(0..FIELD_PRIME);
+        let b: u64 = rng.gen_range(0..FIELD_PRIME);
+        let c = field_mul(a, b);
+        
+        // 对 a, b, c 分别进行 Shamir 分享
+        let shares_a = Self::share(&a, threshold, total_parties)?;
+        let shares_b = Self::share(&b, threshold, total_parties)?;
+        let shares_c = Self::share(&c, threshold, total_parties)?;
+        
+        Ok((shares_a, shares_b, shares_c))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::secret_sharing::MultiplicationSecretSharing;
+
+    #[test]
+    fn test_shamir_multiplication() {
+        let secret1 = 6u64;
+        let secret2 = 7u64;
+        let threshold = 2;
+        let total_parties = 3;
+
+        let shares1 = ShamirSecretSharing::share(&secret1, threshold, total_parties).unwrap();
+        let shares2 = ShamirSecretSharing::share(&secret2, threshold, total_parties).unwrap();
+
+        // 测试分享乘法
+        let product_shares: Vec<Share> = shares1.iter()
+            .zip(shares2.iter())
+            .map(|(s1, s2)| ShamirSecretSharing::mul_shares(s1, s2))
+            .collect::<Result<Vec<_>>>().unwrap();
+
+        // 乘法后需要更多分享（2t-1）
+        let product = ShamirSecretSharing::reconstruct(&product_shares, 3).unwrap();
+        assert_eq!(product, field_mul(secret1, secret2));
+    }
+
+    #[test]
+    fn test_beaver_triple_generation() {
+        let threshold = 2;
+        let total_parties = 3;
+
+        // 测试 Beaver 三元组生成
+        let (shares_a, shares_b, shares_c) = 
+            ShamirSecretSharing::generate_beaver_triple(threshold, total_parties).unwrap();
+
+        // 重构 a, b, c
+        let a = ShamirSecretSharing::reconstruct(&shares_a[0..threshold], threshold).unwrap();
+        let b = ShamirSecretSharing::reconstruct(&shares_b[0..threshold], threshold).unwrap();
+        let c = ShamirSecretSharing::reconstruct(&shares_c[0..threshold], threshold).unwrap();
+
+        // 验证 c = a * b
+        assert_eq!(c, field_mul(a, b));
+    }
+}
+

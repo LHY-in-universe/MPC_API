@@ -117,7 +117,7 @@ impl HomomorphicEncryption for BGV {
         for i in 0..sk.n.min(ciphertext.c0.len()) {
             if i == 0 {
                 decrypted = (ciphertext.c0[i] + ciphertext.c1[i] * sk.s[i]) % sk.q;
-                decrypted = decrypted % sk.t;
+                decrypted %= sk.t;
                 break;
             }
         }

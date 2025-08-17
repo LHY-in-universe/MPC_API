@@ -39,7 +39,7 @@ impl ElGamal {
             if exp % 2 == 1 {
                 result = field_mul(result, base);
             }
-            exp = exp >> 1;
+            exp >>= 1;
             base = field_mul(base, base);
         }
         

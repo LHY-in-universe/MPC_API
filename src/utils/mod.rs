@@ -45,7 +45,9 @@
 pub mod math;
 pub mod random;
 pub mod serialization;
+pub mod memory;
 
 pub use math::*;
 pub use random::*;
 pub use serialization::*;
+pub use memory::*;

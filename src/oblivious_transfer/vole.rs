@@ -143,7 +143,7 @@ impl VectorRandomOLE {
         // Generate random x for receiver based on the random OT output
         let mut rng = rand::thread_rng();
         let receiver_x = if receiver_choice {
-            (chosen + rng.gen_range(0..FIELD_PRIME / 2)) % FIELD_PRIME
+            chosen.wrapping_add(rng.gen_range(0..FIELD_PRIME / 2)) % FIELD_PRIME
         } else {
             rng.gen_range(0..FIELD_PRIME)
         };

@@ -1,0 +1,3 @@
+#!/bin/bash
+cd /Users/lhy/Desktop/Git/MPC_API
+cargo run --bin debug_ecdsa 2>&1

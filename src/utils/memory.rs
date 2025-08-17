@@ -69,10 +69,9 @@
 use std::{
     alloc::{self, Layout},
     ffi::c_void,
-    mem::{self, MaybeUninit},
     ptr::{self, NonNull},
     slice,
-    sync::atomic::{AtomicPtr, AtomicUsize, Ordering},
+    sync::atomic::{AtomicUsize, Ordering},
 };
 use rand::{RngCore, thread_rng};
 use serde::{Deserialize, Serialize};
@@ -542,7 +541,14 @@ impl MemoryLock {
         if result == 0 {
             Ok(true)
         } else {
+            #[cfg(target_os = "linux")]
+            #[cfg(any(target_os = "linux", target_os = "android"))]
             let errno = unsafe { *libc::__errno_location() };
+            #[cfg(any(target_os = "macos", target_os = "ios", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly"))]
+            let _errno = unsafe { *libc::__error() };
+            #[cfg(not(target_os = "linux"))]
+            let errno = unsafe { *libc::__error() };
+            
             match errno {
                 libc::EPERM => Err("没有锁定内存的权限，请以 root 权限运行或增加 ulimit -l".into()),
                 libc::ENOMEM => Err("没有足够的内存可供锁定".into()),
@@ -577,7 +583,10 @@ impl MemoryLock {
     fn unlock_memory(ptr: *mut c_void, size: usize) -> Result<()> {
         let result = unsafe { libc::munlock(ptr, size) };
         if result != 0 {
+            #[cfg(any(target_os = "linux", target_os = "android"))]
             let errno = unsafe { *libc::__errno_location() };
+            #[cfg(any(target_os = "macos", target_os = "ios", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly"))]
+            let errno = unsafe { *libc::__error() };
             eprintln!("内存解锁警告，错误代码: {}", errno);
         }
         Ok(())
@@ -642,8 +651,8 @@ impl StackProtector {
     /// 返回带有随机金丝雀值的栈保护器
     pub fn new() -> Self {
         let mut rng = thread_rng();
-        let canary = rng.next_u64() ^ STACK_CANARY;
         let id = rng.next_u32();
+        let canary = (id as u64) ^ STACK_CANARY;
         
         StackProtector { canary, id }
     }
@@ -814,7 +823,7 @@ pub fn test_memory_security() -> Result<()> {
     // 测试安全缓冲区
     println!("  测试安全缓冲区...");
     let mut buffer = SecureBuffer::new(1024)?;
-    let test_data = b"这是测试数据，应该被安全清除";
+    let test_data = "test data for secure clearing".as_bytes();
     buffer.copy_from_slice(&test_data[..])?;
     
     // 测试内容比较
@@ -861,7 +870,7 @@ mod tests {
     #[test]
     fn test_secure_buffer_operations() {
         let mut buffer = SecureBuffer::new(32).unwrap();
-        let test_data = b"hello world, this is test data!";
+        let test_data = b"hello world, this is test data!!"; // 32 bytes
         
         buffer.copy_from_slice(test_data).unwrap();
         

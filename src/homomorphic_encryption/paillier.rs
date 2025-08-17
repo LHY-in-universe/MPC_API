@@ -39,7 +39,7 @@ impl Paillier {
             if exp % 2 == 1 {
                 result = (result * base) % (modulus as u128);
             }
-            exp = exp >> 1;
+            exp >>= 1;
             base = (base * base) % (modulus as u128);
         }
         

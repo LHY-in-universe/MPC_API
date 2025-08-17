@@ -181,7 +181,7 @@ impl DHOTSetup {
             if exp % 2 == 1 {
                 result = field_mul(result, base);
             }
-            exp = exp >> 1;
+            exp >>= 1;
             base = field_mul(base, base);
         }
         
@@ -273,4 +273,15 @@ pub fn hash_to_bytes(input: u64) -> Vec<u8> {
     let mut hasher = Sha256::new();
     hasher.update(input.to_le_bytes());
     hasher.finalize().to_vec()
+}
+
+#[cfg(test)]
+mod tests {
+    //! 不经意传输测试
+    //! 
+    //! 包含基础 OT, OT 扩展, VOLE, Random OT 等不经意传输协议的测试
+
+    use super::*;
+
+    // Tests will be moved here from src/oblivious_transfer/
 }
