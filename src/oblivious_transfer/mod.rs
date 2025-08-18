@@ -274,14 +274,3 @@ pub fn hash_to_bytes(input: u64) -> Vec<u8> {
     hasher.update(input.to_le_bytes());
     hasher.finalize().to_vec()
 }
-
-#[cfg(test)]
-mod tests {
-    //! 不经意传输测试
-    //! 
-    //! 包含基础 OT, OT 扩展, VOLE, Random OT 等不经意传输协议的测试
-
-    use super::*;
-
-    // Tests will be moved here from src/oblivious_transfer/
-}

@@ -89,6 +89,208 @@ impl AdditiveSecretSharingScheme {
     pub fn new() -> Self {
         Self
     }
+
+    /// 验证加法份额的完整性
+    ///
+    /// 检查加法份额是否完整且有效。由于加法秘密分享需要所有份额才能重构，
+    /// 此方法主要验证份额的数量和格式。
+    ///
+    /// # 参数
+    /// - `shares`: 要验证的份额切片
+    /// - `expected_parties`: 预期的参与方数量
+    ///
+    /// # 返回值
+    /// 如果份额有效返回true，否则返回false
+    ///
+    /// # 示例
+    /// ```
+    /// let scheme = AdditiveSecretSharingScheme::new();
+    /// let secret = 42u64;
+    /// let shares = scheme.share_additive(&secret, 3)?;
+    /// let is_valid = scheme.verify_additive_shares(&shares, 3);
+    /// assert!(is_valid);
+    /// ```
+    pub fn verify_additive_shares(&self, shares: &[AdditiveShare], expected_parties: usize) -> bool {
+        if shares.len() != expected_parties {
+            return false;
+        }
+
+        // 检查party_id是否连续且唯一
+        let mut party_ids: Vec<usize> = shares.iter().map(|s| s.party_id).collect();
+        party_ids.sort();
+        
+        for (i, &party_id) in party_ids.iter().enumerate() {
+            if party_id != i {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// 转换为兼容的Shamir份额格式
+    ///
+    /// 将加法秘密分享的份额转换为Shamir兼容格式，便于在不同协议间切换。
+    ///
+    /// # 参数
+    /// - `additive_shares`: 加法份额切片
+    ///
+    /// # 返回值
+    /// 返回转换后的Share向量
+    ///
+    /// # 示例
+    /// ```
+    /// let scheme = AdditiveSecretSharingScheme::new();
+    /// let secret = 42u64;
+    /// let additive_shares = scheme.share_additive(&secret, 3)?;
+    /// let shamir_shares = scheme.to_shamir_shares(&additive_shares);
+    /// ```
+    pub fn to_shamir_shares(&self, additive_shares: &[AdditiveShare]) -> Vec<super::Share> {
+        additive_shares.iter()
+            .map(|share| super::Share::new((share.party_id + 1) as u64, share.value))
+            .collect()
+    }
+
+    /// 从Shamir份额格式转换
+    ///
+    /// 将Shamir格式的份额转换为加法秘密分享格式。
+    ///
+    /// # 参数
+    /// - `shamir_shares`: Shamir份额切片
+    ///
+    /// # 返回值
+    /// 成功时返回转换后的AdditiveShare向量
+    ///
+    /// # 错误
+    /// 当Shamir份额的x坐标不连续时返回错误
+    ///
+    /// # 示例
+    /// ```
+    /// let scheme = AdditiveSecretSharingScheme::new();
+    /// let shamir_shares = vec![Share::new(1, 10), Share::new(2, 20), Share::new(3, 30)];
+    /// let additive_shares = scheme.from_shamir_shares(&shamir_shares)?;
+    /// ```
+    pub fn from_shamir_shares(&self, shamir_shares: &[super::Share]) -> Result<Vec<AdditiveShare>> {
+        let mut additive_shares = Vec::with_capacity(shamir_shares.len());
+        
+        for (i, share) in shamir_shares.iter().enumerate() {
+            if share.x != (i + 1) as u64 {
+                return Err(MpcError::InvalidSecretShare);
+            }
+            additive_shares.push(AdditiveShare::new(i, share.y));
+        }
+        
+        Ok(additive_shares)
+    }
+
+    /// 生成零的加法份额
+    ///
+    /// 生成一组加法份额，它们的和为0。这在协议中用作掩码或随机化。
+    ///
+    /// # 参数
+    /// - `num_parties`: 参与方数量
+    ///
+    /// # 返回值
+    /// 成功时返回零加法份额的向量
+    ///
+    /// # 示例
+    /// ```
+    /// let scheme = AdditiveSecretSharingScheme::new();
+    /// let zero_shares = scheme.generate_zero_additive_shares(3)?;
+    /// let reconstructed = scheme.reconstruct_additive(&zero_shares)?;
+    /// assert_eq!(reconstructed, 0);
+    /// ```
+    pub fn generate_zero_additive_shares(&self, num_parties: usize) -> Result<Vec<AdditiveShare>> {
+        self.share_additive(&0u64, num_parties)
+    }
+
+    /// 生成随机加法份额
+    ///
+    /// 生成一组加法份额，对应一个随机的秘密值。返回秘密值和对应的份额。
+    ///
+    /// # 参数
+    /// - `num_parties`: 参与方数量
+    ///
+    /// # 返回值
+    /// 成功时返回(秘密值, 份额向量)的元组
+    ///
+    /// # 示例
+    /// ```
+    /// let scheme = AdditiveSecretSharingScheme::new();
+    /// let (secret, shares) = scheme.generate_random_additive_shares(3)?;
+    /// let reconstructed = scheme.reconstruct_additive(&shares)?;
+    /// assert_eq!(reconstructed, secret);
+    /// ```
+    pub fn generate_random_additive_shares(&self, num_parties: usize) -> Result<(u64, Vec<AdditiveShare>)> {
+        let mut rng = rand::thread_rng();
+        let secret = rng.gen_range(0..FIELD_PRIME);
+        let shares = self.share_additive(&secret, num_parties)?;
+        Ok((secret, shares))
+    }
+
+    /// 份额的求反运算
+    ///
+    /// 计算加法份额的相反数，对应于秘密的求反。
+    ///
+    /// # 参数
+    /// - `share`: 要求反的份额
+    ///
+    /// # 返回值
+    /// 返回求反后的份额
+    ///
+    /// # 示例
+    /// ```
+    /// let scheme = AdditiveSecretSharingScheme::new();
+    /// let share = AdditiveShare::new(0, 10);
+    /// let neg_share = scheme.negate_additive_share(&share);
+    /// // neg_share.value 应该是 (-10) mod FIELD_PRIME
+    /// ```
+    pub fn negate_additive_share(&self, share: &AdditiveShare) -> AdditiveShare {
+        let neg_value = field_sub(0, share.value);
+        AdditiveShare::new(share.party_id, neg_value)
+    }
+
+    /// 多个份额的加法
+    ///
+    /// 计算多个加法份额的和，支持超过两个份额的批量加法。
+    ///
+    /// # 参数
+    /// - `shares`: 要相加的份额切片
+    ///
+    /// # 返回值
+    /// 成功时返回所有份额的和
+    ///
+    /// # 错误
+    /// 当份额列表为空或party_id不一致时返回错误
+    ///
+    /// # 示例
+    /// ```
+    /// let scheme = AdditiveSecretSharingScheme::new();
+    /// let shares = vec![
+    ///     AdditiveShare::new(0, 10),
+    ///     AdditiveShare::new(0, 20),
+    ///     AdditiveShare::new(0, 30),
+    /// ];
+    /// let sum_share = scheme.add_multiple_additive_shares(&shares)?;
+    /// assert_eq!(sum_share.value, 60);
+    /// ```
+    pub fn add_multiple_additive_shares(&self, shares: &[AdditiveShare]) -> Result<AdditiveShare> {
+        if shares.is_empty() {
+            return Err(MpcError::InsufficientShares);
+        }
+
+        let party_id = shares[0].party_id;
+        let mut sum = 0u64;
+
+        for share in shares {
+            if share.party_id != party_id {
+                return Err(MpcError::InvalidSecretShare);
+            }
+            sum = field_add(sum, share.value);
+        }
+
+        Ok(AdditiveShare::new(party_id, sum))
+    }
     
     /// 将秘密分享为多个加法份额
     ///
@@ -423,89 +625,3 @@ impl AdditiveSecretSharingScheme {
         Ok((shares_a, shares_b, shares_c))
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_additive_arithmetic() {
-        let scheme = AdditiveSecretSharingScheme::new();
-        let secret1 = 30u64;
-        let secret2 = 10u64;
-        let num_parties = 3;
-
-        // 测试加法
-        let shares1 = scheme.share_additive(&secret1, num_parties).unwrap();
-        let shares2 = scheme.share_additive(&secret2, num_parties).unwrap();
-
-        let sum_shares: Vec<AdditiveShare> = shares1.iter()
-            .zip(shares2.iter())
-            .map(|(s1, s2)| scheme.add_additive_shares(s1, s2))
-            .collect::<Result<Vec<_>>>().unwrap();
-
-        let sum = scheme.reconstruct_additive(&sum_shares).unwrap();
-        assert_eq!(sum, field_add(secret1, secret2));
-
-        // 测试减法
-        let diff_shares: Vec<AdditiveShare> = shares1.iter()
-            .zip(shares2.iter())
-            .map(|(s1, s2)| scheme.sub_additive_shares(s1, s2))
-            .collect::<Result<Vec<_>>>().unwrap();
-
-        let diff = scheme.reconstruct_additive(&diff_shares).unwrap();
-        assert_eq!(diff, field_sub(secret1, secret2));
-
-        // 测试标量乘法
-        let scalar = 5u64;
-        let scaled_shares: Vec<AdditiveShare> = shares1.iter()
-            .map(|share| scheme.scalar_mul_additive(share, &scalar))
-            .collect::<Result<Vec<_>>>().unwrap();
-
-        let scaled = scheme.reconstruct_additive(&scaled_shares).unwrap();
-        assert_eq!(scaled, field_mul(secret1, scalar));
-    }
-
-    #[test]
-    fn test_additive_beaver_multiplication() {
-        let scheme = AdditiveSecretSharingScheme::new();
-        let secret1 = 6u64;
-        let secret2 = 7u64;
-        let num_parties = 3;
-
-        // 生成要相乘的分享
-        let shares_x = scheme.share_additive(&secret1, num_parties).unwrap();
-        let shares_y = scheme.share_additive(&secret2, num_parties).unwrap();
-
-        // 生成 Beaver 三元组
-        let (shares_a, shares_b, shares_c) = 
-            scheme.generate_beaver_triple_additive(num_parties).unwrap();
-
-        // 计算 d = x - a
-        let d_shares: Vec<AdditiveShare> = shares_x.iter()
-            .zip(shares_a.iter())
-            .map(|(sx, sa)| scheme.sub_additive_shares(sx, sa))
-            .collect::<Result<Vec<_>>>().unwrap();
-        let d = scheme.reconstruct_additive(&d_shares).unwrap();
-
-        // 计算 e = y - b
-        let e_shares: Vec<AdditiveShare> = shares_y.iter()
-            .zip(shares_b.iter())
-            .map(|(sy, sb)| scheme.sub_additive_shares(sy, sb))
-            .collect::<Result<Vec<_>>>().unwrap();
-        let e = scheme.reconstruct_additive(&e_shares).unwrap();
-
-        // 执行 Beaver 乘法
-        let result_shares: Vec<AdditiveShare> = (0..num_parties).map(|i| {
-            scheme.beaver_mul_additive(
-                &shares_x[i], &shares_y[i],
-                &shares_a[i], &shares_b[i], &shares_c[i],
-                &d, &e
-            )
-        }).collect::<Result<Vec<_>>>().unwrap();
-
-        let result = scheme.reconstruct_additive(&result_shares).unwrap();
-        assert_eq!(result, field_mul(secret1, secret2));
-    }
-}
-

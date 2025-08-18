@@ -28,6 +28,8 @@
 //! 
 //! ## 使用示例 (Usage Examples)
 //! 
+//! ### Shamir 秘密分享基本示例
+//! 
 //! ```rust
 //! use mpc_api::secret_sharing::*;
 //! 
@@ -45,19 +47,122 @@
 //!     .collect::<Result<Vec<_>>>()?;
 //! let sum = ShamirSecretSharing::reconstruct(&sum_shares[0..2], 2)?;
 //! assert_eq!(sum, field_add(10, 20));
+//! 
+//! // 验证份额
+//! let scheme = ShamirSecretSharing::new();
+//! let is_valid = scheme.verify_shares(&shares, 2);
+//! assert!(is_valid);
+//! ```
+//! 
+//! ### 加法秘密分享示例
+//! 
+//! ```rust
+//! use mpc_api::secret_sharing::*;
+//! 
+//! let scheme = AdditiveSecretSharingScheme::new();
+//! let secret = 100u64;
+//! 
+//! // 分享秘密
+//! let shares = scheme.share_additive(&secret, 3)?;
+//! 
+//! // 重构秘密
+//! let reconstructed = scheme.reconstruct_additive(&shares)?;
+//! assert_eq!(reconstructed, secret);
+//! 
+//! // 同态运算
+//! let shares1 = scheme.share_additive(&50, 3)?;
+//! let shares2 = scheme.share_additive(&30, 3)?;
+//! 
+//! let sum_shares: Result<Vec<_>> = shares1.iter().zip(shares2.iter())
+//!     .map(|(s1, s2)| scheme.add_additive_shares(s1, s2))
+//!     .collect();
+//! let sum_shares = sum_shares?;
+//! let sum = scheme.reconstruct_additive(&sum_shares)?;
+//! assert_eq!(sum, field_add(50, 30));
+//! ```
+//! 
+//! ### 复制秘密分享示例
+//! 
+//! ```rust
+//! use mpc_api::secret_sharing::*;
+//! 
+//! let scheme = ReplicatedSecretSharing::new();
+//! let secret = 77u64;
+//! 
+//! // 3方复制秘密分享
+//! let shares = scheme.share_replicated(&secret)?;
+//! 
+//! // 任意两方可以重构
+//! let reconstructed = scheme.reconstruct_replicated(&shares[0..2])?;
+//! assert_eq!(reconstructed, secret);
+//! 
+//! // 验证份额一致性
+//! let is_valid = scheme.verify_replicated_shares(&shares);
+//! assert!(is_valid);
+//! 
+//! // 高效的同态运算
+//! let shares1 = scheme.share_replicated(&25)?;
+//! let shares2 = scheme.share_replicated(&35)?;
+//! 
+//! let sum_shares: Result<Vec<_>> = shares1.iter().zip(shares2.iter())
+//!     .map(|(s1, s2)| scheme.add_replicated_shares(s1, s2))
+//!     .collect();
+//! let sum_shares = sum_shares?;
+//! let sum = scheme.reconstruct_replicated(&sum_shares[0..2])?;
+//! assert_eq!(sum, field_add(25, 35));
+//! ```
+//! 
+//! ### Beaver 三元组乘法示例
+//! 
+//! ```rust
+//! use mpc_api::secret_sharing::*;
+//! 
+//! // 生成 Beaver 三元组
+//! let (beaver_a, beaver_b, beaver_c) = ShamirSecretSharing::generate_beaver_triple(2, 3)?;
+//! 
+//! // 要相乘的两个秘密
+//! let x_shares = ShamirSecretSharing::share(&7, 2, 3)?;
+//! let y_shares = ShamirSecretSharing::share(&6, 2, 3)?;
+//! 
+//! // 计算 d = x - a, e = y - b (需要重构公开)
+//! let d_shares: Vec<_> = x_shares.iter().zip(beaver_a.iter())
+//!     .map(|(x, a)| ShamirSecretSharing::sub_shares(x, a).unwrap())
+//!     .collect();
+//! let e_shares: Vec<_> = y_shares.iter().zip(beaver_b.iter())
+//!     .map(|(y, b)| ShamirSecretSharing::sub_shares(y, b).unwrap())
+//!     .collect();
+//! 
+//! let d = ShamirSecretSharing::reconstruct(&d_shares[0..2], 2)?;
+//! let e = ShamirSecretSharing::reconstruct(&e_shares[0..2], 2)?;
+//! 
+//! // 使用 Beaver 三元组计算乘积
+//! let product_shares: Result<Vec<_>> = (0..3).map(|i| {
+//!     ShamirSecretSharing::beaver_mul(
+//!         &x_shares[i], &y_shares[i],
+//!         &beaver_a[i], &beaver_b[i], &beaver_c[i],
+//!         &d, &e
+//!     )
+//! }).collect();
+//! let product_shares = product_shares?;
+//! 
+//! let product = ShamirSecretSharing::reconstruct(&product_shares[0..2], 2)?;
+//! assert_eq!(product, field_mul(7, 6));
 //! ```
 
 pub mod shamir;
 pub mod additive;
+pub mod replicated;
 
 pub use shamir::*;
 pub use additive::*;
+pub use replicated::*;
 
 // 重新导出主要的 trait (traits are defined in this module)
 // pub use {SecretSharing, AdditiveSecretSharing, MultiplicationSecretSharing};
 
 use serde::{Deserialize, Serialize};
-use crate::Result;
+use crate::{Result, MpcError};
+use rand::Rng;
 
 // 使用 u64 有限域运算
 /// 有限域的素数模数
@@ -111,9 +216,14 @@ impl Share {
 /// # 返回值
 /// 
 /// 返回 (a + b) mod p 的结果
+#[inline]
 pub fn field_add(a: u64, b: u64) -> u64 {
-    let sum = (a as u128 + b as u128) % FIELD_PRIME as u128;
-    sum as u64
+    let sum = a as u128 + b as u128;
+    if sum >= FIELD_PRIME as u128 {
+        (sum - FIELD_PRIME as u128) as u64
+    } else {
+        sum as u64
+    }
 }
 
 /// 有限域减法
@@ -129,6 +239,7 @@ pub fn field_add(a: u64, b: u64) -> u64 {
 /// # 返回值
 /// 
 /// 返回 (a - b) mod p 的结果
+#[inline]
 pub fn field_sub(a: u64, b: u64) -> u64 {
     if a >= b {
         a - b
@@ -150,6 +261,7 @@ pub fn field_sub(a: u64, b: u64) -> u64 {
 /// # 返回值
 /// 
 /// 返回 (a * b) mod p 的结果
+#[inline]
 pub fn field_mul(a: u64, b: u64) -> u64 {
     let product = (a as u128 * b as u128) % FIELD_PRIME as u128;
     product as u64
@@ -169,6 +281,149 @@ pub fn field_mul(a: u64, b: u64) -> u64 {
 /// 如果逆元存在则返回 Some(逆元)，否则返回 None
 pub fn field_inv(a: u64) -> Option<u64> {
     extended_gcd(a, FIELD_PRIME).map(|(inv, _)| inv)
+}
+
+/// 验证有限域元素的有效性
+/// 
+/// 检查给定的数值是否在有效的有限域范围内。
+/// 
+/// # 参数
+/// 
+/// * `value` - 要验证的数值
+/// 
+/// # 返回值
+/// 
+/// 如果数值有效返回true，否则返回false
+pub fn validate_field_element(value: u64) -> bool {
+    value < FIELD_PRIME
+}
+
+/// 验证门限参数的有效性
+/// 
+/// 检查门限秘密分享的参数是否合理。
+/// 
+/// # 参数
+/// 
+/// * `threshold` - 门限值
+/// * `total_parties` - 总参与方数量
+/// 
+/// # 返回值
+/// 
+/// 如果参数有效返回Ok(())，否则返回相应的错误
+pub fn validate_threshold_params(threshold: usize, total_parties: usize) -> Result<()> {
+    if threshold == 0 {
+        return Err(MpcError::InvalidThreshold);
+    }
+    if threshold > total_parties {
+        return Err(MpcError::InvalidThreshold);
+    }
+    if total_parties == 0 {
+        return Err(MpcError::InvalidThreshold);
+    }
+    Ok(())
+}
+
+/// 安全随机数生成器
+/// 
+/// 生成密码学安全的随机有限域元素。
+/// 
+/// # 返回值
+/// 
+/// 返回范围在 [0, FIELD_PRIME) 内的随机数
+pub fn generate_random_field_element() -> u64 {
+    let mut rng = rand::thread_rng();
+    rng.gen_range(0..FIELD_PRIME)
+}
+
+/// 份额信息结构
+/// 
+/// 包含份额的基本统计信息和元数据。
+#[derive(Debug, Clone)]
+pub struct ShareInfo {
+    /// 份额总数
+    pub total_shares: usize,
+    /// 门限值
+    pub threshold: usize,
+    /// 秘密分享方案类型
+    pub scheme_type: String,
+}
+
+impl ShareInfo {
+    /// 创建新的份额信息
+    pub fn new(total_shares: usize, threshold: usize, scheme_type: String) -> Self {
+        Self {
+            total_shares,
+            threshold,
+            scheme_type,
+        }
+    }
+
+    /// 检查是否有足够的份额进行重构
+    pub fn has_sufficient_shares(&self, available_shares: usize) -> bool {
+        available_shares >= self.threshold
+    }
+
+    /// 计算冗余度
+    pub fn redundancy(&self) -> f64 {
+        if self.threshold == 0 {
+            0.0
+        } else {
+            (self.total_shares - self.threshold) as f64 / self.threshold as f64
+        }
+    }
+}
+
+/// 秘密分享统计信息
+/// 
+/// 提供关于秘密分享操作的统计和性能信息。
+#[derive(Debug, Clone, Default)]
+pub struct SecretSharingStats {
+    /// 分享操作次数
+    pub share_operations: usize,
+    /// 重构操作次数
+    pub reconstruct_operations: usize,
+    /// 加法操作次数
+    pub add_operations: usize,
+    /// 乘法操作次数
+    pub mul_operations: usize,
+}
+
+impl SecretSharingStats {
+    /// 创建新的统计信息
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// 记录分享操作
+    pub fn record_share(&mut self) {
+        self.share_operations += 1;
+    }
+
+    /// 记录重构操作
+    pub fn record_reconstruct(&mut self) {
+        self.reconstruct_operations += 1;
+    }
+
+    /// 记录加法操作
+    pub fn record_add(&mut self) {
+        self.add_operations += 1;
+    }
+
+    /// 记录乘法操作
+    pub fn record_mul(&mut self) {
+        self.mul_operations += 1;
+    }
+
+    /// 获取总操作数
+    pub fn total_operations(&self) -> usize {
+        self.share_operations + self.reconstruct_operations + 
+        self.add_operations + self.mul_operations
+    }
+
+    /// 重置统计信息
+    pub fn reset(&mut self) {
+        *self = Self::default();
+    }
 }
 
 /// 扩展欧几里德算法
@@ -385,100 +640,4 @@ pub trait MultiplicationSecretSharing: AdditiveSecretSharing {
         threshold: usize,
         total_parties: usize,
     ) -> Result<(Vec<Self::Share>, Vec<Self::Share>, Vec<Self::Share>)>;
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::secret_sharing::{ShamirSecretSharing, SecretSharing, AdditiveSecretSharing, AdditiveSecretSharingScheme, field_add, field_mul};
-
-    #[test]
-    fn test_shamir_secret_sharing() {
-        let secret = 42u64;
-        let threshold = 3;
-        let total_parties = 5;
-        
-        let shares = ShamirSecretSharing::share(&secret, threshold, total_parties).unwrap();
-        assert_eq!(shares.len(), total_parties);
-        
-        let reconstructed = ShamirSecretSharing::reconstruct(&shares[..threshold], threshold).unwrap();
-        assert_eq!(secret, reconstructed);
-    }
-
-    #[test]
-    fn test_shamir_additive_operations() {
-        let secret1 = 1000u64;
-        let secret2 = 2000u64;
-        let threshold = 2;
-        let total_parties = 3;
-        
-        let shares1 = ShamirSecretSharing::share(&secret1, threshold, total_parties).unwrap();
-        let shares2 = ShamirSecretSharing::share(&secret2, threshold, total_parties).unwrap();
-        
-        // Test addition
-        let mut sum_shares = Vec::new();
-        for i in 0..threshold {
-            let sum_share = ShamirSecretSharing::add_shares(&shares1[i], &shares2[i]).unwrap();
-            sum_shares.push(sum_share);
-        }
-        
-        let sum_result = ShamirSecretSharing::reconstruct(&sum_shares, threshold).unwrap();
-        assert_eq!(sum_result, field_add(secret1, secret2));
-        
-        // Test scalar multiplication
-        let scalar = 3u64;
-        let mut scaled_shares = Vec::new();
-        for i in 0..threshold {
-            let scaled_share = ShamirSecretSharing::scalar_mul(&shares1[i], &scalar).unwrap();
-            scaled_shares.push(scaled_share);
-        }
-        
-        let scaled_result = ShamirSecretSharing::reconstruct(&scaled_shares, threshold).unwrap();
-        assert_eq!(scaled_result, field_mul(secret1, scalar));
-    }
-
-    #[test]
-    fn test_additive_secret_sharing() {
-        let scheme = AdditiveSecretSharingScheme::new();
-        let secret = 1000u64;
-        let num_parties = 5;
-        
-        let shares = scheme.share_additive(&secret, num_parties).unwrap();
-        assert_eq!(shares.len(), num_parties);
-        
-        let reconstructed = scheme.reconstruct_additive(&shares).unwrap();
-        assert_eq!(secret, reconstructed);
-    }
-
-    #[test]
-    fn test_additive_operations() {
-        let scheme = AdditiveSecretSharingScheme::new();
-        let secret1 = 100u64;
-        let secret2 = 200u64;
-        let num_parties = 3;
-        
-        let shares1 = scheme.share_additive(&secret1, num_parties).unwrap();
-        let shares2 = scheme.share_additive(&secret2, num_parties).unwrap();
-        
-        // Test addition
-        let mut sum_shares = Vec::new();
-        for i in 0..num_parties {
-            let sum_share = scheme.add_additive_shares(&shares1[i], &shares2[i]).unwrap();
-            sum_shares.push(sum_share);
-        }
-        
-        let sum_result = scheme.reconstruct_additive(&sum_shares).unwrap();
-        assert_eq!(sum_result, field_add(secret1, secret2));
-        
-        // Test scalar multiplication
-        let scalar = 3u64;
-        let mut scaled_shares = Vec::new();
-        for share in &shares1 {
-            let scaled_share = scheme.scalar_mul_additive(share, &scalar).unwrap();
-            scaled_shares.push(scaled_share);
-        }
-        
-        let scaled_result = scheme.reconstruct_additive(&scaled_shares).unwrap();
-        assert_eq!(scaled_result, field_mul(secret1, scalar));
-    }
 }

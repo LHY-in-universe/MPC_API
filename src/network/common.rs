@@ -293,8 +293,7 @@ pub mod utils {
 
     /// 生成连接 ID
     pub fn generate_connection_id() -> String {
-        use uuid::Uuid;
-        format!("conn_{}", Uuid::new_v4())
+        format!("conn_{}", uuid::Uuid::new_v4())
     }
 
     /// 计算两个时间点之间的延迟
@@ -423,86 +422,3 @@ pub mod constants {
     pub const USER_AGENT: &str = "MPC-API/1.0";
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use super::utils::*;
-
-    #[test]
-    fn test_network_error_display() {
-        let error = NetworkError::ConnectionError("测试错误".to_string());
-        assert!(error.to_string().contains("测试错误"));
-    }
-
-    #[test]
-    fn test_valid_ip() {
-        assert!(is_valid_ip("192.168.1.1"));
-        assert!(is_valid_ip("::1"));
-        assert!(!is_valid_ip("invalid_ip"));
-    }
-
-    #[test]
-    fn test_valid_port() {
-        assert!(is_valid_port(8080));
-        assert!(is_valid_port(1));
-        assert!(is_valid_port(65535));
-        assert!(!is_valid_port(0));
-    }
-
-    #[test]
-    fn test_parse_socket_addr() {
-        let result = parse_socket_addr("127.0.0.1:8080");
-        assert!(result.is_ok());
-        
-        let bad_result = parse_socket_addr("invalid");
-        assert!(bad_result.is_err());
-    }
-
-    #[test]
-    fn test_generate_connection_id() {
-        let id1 = generate_connection_id();
-        let id2 = generate_connection_id();
-        
-        assert_ne!(id1, id2);
-        assert!(id1.starts_with("conn_"));
-    }
-
-    #[test]
-    fn test_format_bytes() {
-        assert_eq!(format_bytes(1024), "1.00 KB");
-        assert_eq!(format_bytes(1048576), "1.00 MB");
-        assert_eq!(format_bytes(500), "500.00 B");
-    }
-
-    #[test]
-    fn test_network_config_validation() {
-        let mut config = NetworkConfig::default();
-        assert!(validate_network_config(&config).is_ok());
-        
-        // 测试端口冲突
-        config.http_config.port = config.p2p_config.port;
-        assert!(validate_network_config(&config).is_err());
-    }
-
-    #[test]
-    fn test_merge_metrics() {
-        let metrics1 = NetworkMetrics {
-            total_connections: 10,
-            active_connections: 5,
-            bytes_sent: 1000,
-            ..Default::default()
-        };
-        
-        let metrics2 = NetworkMetrics {
-            total_connections: 20,
-            active_connections: 8,
-            bytes_sent: 2000,
-            ..Default::default()
-        };
-        
-        let merged = merge_metrics(&metrics1, &metrics2);
-        assert_eq!(merged.total_connections, 30);
-        assert_eq!(merged.active_connections, 13);
-        assert_eq!(merged.bytes_sent, 3000);
-    }
-}

@@ -6,6 +6,31 @@
 
 ### 🌟 核心示例文件
 
+#### `simple_network_demo.rs` - **🆕 简化网络演示程序 (推荐开始)**
+**测试目的**: 展示 MPC API 网络模块的核心功能，提供分布式计算入门
+**具体作用**:
+- **多节点 MPC 网络**: 模拟 Alice、Bob、Charlie 三方参与的 MPC 计算
+- **P2P 节点管理**: 点对点网络的创建、连接和消息传递
+- **HTTP API 服务**: RESTful API 服务器和客户端的使用
+- **秘密分享网络传输**: Shamir 秘密分享在网络中的序列化和传输
+- **错误处理最佳实践**: 常见网络错误的处理和恢复机制
+
+**运行方式**:
+```bash
+# 运行完整网络演示
+cargo run --example simple_network_demo
+
+# 运行测试用例
+cargo test --example simple_network_demo
+```
+
+#### `network_example.rs` - 基础网络功能演示
+**测试目的**: 展示网络模块的基础功能和工具函数
+**具体作用**:
+- **网络管理器**: 统一管理 P2P 和 HTTP 服务
+- **网络协议**: 消息格式和序列化演示
+- **网络工具**: 端口检查、IP 获取等实用功能
+
 #### `basic_functionality_demo.rs` - 基础功能演示
 **测试目的**: 提供 MPC API 的入门教程和基础概念验证
 **具体作用**:

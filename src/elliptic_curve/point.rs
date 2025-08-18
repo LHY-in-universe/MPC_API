@@ -1,7 +1,7 @@
 //! Elliptic curve point operations
 
 use super::*;
-use crate::secret_sharing::{FIELD_PRIME, field_add, field_sub, field_mul};
+use crate::secret_sharing::FIELD_PRIME;
 
 impl ECPoint {
     pub fn negate(&self) -> Self {

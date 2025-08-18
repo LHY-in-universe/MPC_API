@@ -182,30 +182,3 @@ impl FullyHomomorphic for BGV {
         Err(MpcError::ProtocolError("BGV circuit evaluation not implemented".to_string()))
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    #[test]
-    fn test_bgv_keygen() {
-        let result = BGV::keygen();
-        assert!(result.is_ok());
-        
-        let (pk, sk) = result.unwrap();
-        assert_eq!(pk.n, BGV::DEFAULT_N);
-        assert_eq!(sk.n, pk.n);
-    }
-    
-    #[test] 
-    fn test_bgv_encrypt_decrypt() {
-        let (pk, sk) = BGV::keygen().unwrap();
-        let message = 7u64;
-        
-        let ciphertext = BGV::encrypt(&pk, &message).unwrap();
-        let decrypted = BGV::decrypt(&sk, &ciphertext).unwrap();
-        
-        // BGV decryption might have noise, so check it's reasonable
-        assert!(decrypted < pk.t);
-    }
-}

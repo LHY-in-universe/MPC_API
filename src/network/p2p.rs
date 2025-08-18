@@ -932,32 +932,35 @@ impl MessageHandler for DefaultMessageHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    
     #[tokio::test]
     async fn test_p2p_node_creation() {
         let config = PeerConfig::default();
         let node = P2PNode::new(config).await;
-        assert!(node.is_ok());
+        assert!(node.is_ok(), "Failed to create P2P node");
     }
-
+    
     #[tokio::test]
-    async fn test_peer_discovery_creation() {
+    async fn test_peer_discovery() {
         let config = PeerConfig::default();
         let discovery = PeerDiscovery::new(config);
-        assert!(discovery.is_ok());
+        assert!(discovery.is_ok(), "Failed to create peer discovery");
     }
-
-    #[tokio::test]
-    async fn test_peer_config_default() {
-        let config = PeerConfig::default();
-        assert_eq!(config.host, "127.0.0.1");
-        assert_eq!(config.port, 8000);
-        assert_eq!(config.node_role, NodeRole::Participant);
-    }
-
+    
     #[test]
-    fn test_peer_status() {
-        let status = PeerStatus::Connected;
-        assert_eq!(status, PeerStatus::Connected);
+    fn test_default_message_handler() {
+        let handler = DefaultMessageHandler;
+        let message = NetworkMessage::new("ping", b"test");
+        
+        // Test that handler can be created and message processed
+        tokio::runtime::Runtime::new().unwrap().block_on(async {
+            let result = handler.handle_message("test_peer", &message).await;
+            assert!(result.is_ok(), "Message handling failed");
+            
+            if let Ok(Some(response)) = result {
+                assert_eq!(response.message_type, "pong");
+            }
+        });
     }
 }
+

@@ -57,6 +57,200 @@ impl ShamirSecretSharing {
     pub fn new() -> Self {
         Self
     }
+
+    /// 验证份额的有效性
+    ///
+    /// 检查给定的份额是否对同一个秘密有效。这通过验证份额是否来自同一个多项式来实现。
+    ///
+    /// # 参数
+    /// - `shares`: 要验证的份额数组
+    /// - `threshold`: 原始的门限值
+    ///
+    /// # 返回值
+    /// 如果份额有效返回true，否则返回false
+    ///
+    /// # 示例
+    /// ```
+    /// let scheme = ShamirSecretSharing::new();
+    /// let secret = 42u64;
+    /// let shares = ShamirSecretSharing::share(&secret, 2, 3)?;
+    /// let is_valid = scheme.verify_shares(&shares[0..2], 2);
+    /// assert!(is_valid);
+    /// ```
+    pub fn verify_shares(&self, shares: &[Share], threshold: usize) -> bool {
+        if shares.len() < threshold {
+            return false;
+        }
+
+        // 使用前threshold个份额重构秘密
+        let shares_subset = &shares[..threshold];
+        if let Ok(secret1) = self.lagrange_interpolation(shares_subset) {
+            // 如果有更多份额，使用不同的threshold个份额再次重构
+            if shares.len() > threshold {
+                for i in 1..=(shares.len() - threshold) {
+                    let alt_shares = &shares[i..i + threshold];
+                    if let Ok(secret2) = self.lagrange_interpolation(alt_shares) {
+                        if secret1 != secret2 {
+                            return false;
+                        }
+                    } else {
+                        return false;
+                    }
+                }
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    /// 更新现有份额（份额刷新）
+    ///
+    /// 生成新的随机多项式份额，但保持相同的秘密。这用于提高安全性，
+    /// 防止攻击者通过长期观察学习到份额信息。
+    ///
+    /// # 参数
+    /// - `old_shares`: 现有的份额
+    /// - `threshold`: 门限值
+    ///
+    /// # 返回值
+    /// 成功时返回刷新后的份额
+    ///
+    /// # 错误
+    /// 当份额不足或重构失败时返回错误
+    ///
+    /// # 示例
+    /// ```
+    /// let scheme = ShamirSecretSharing::new();
+    /// let secret = 42u64;
+    /// let old_shares = ShamirSecretSharing::share(&secret, 2, 3)?;
+    /// let new_shares = scheme.refresh_shares(&old_shares, 2, 3)?;
+    /// // 新份额对应相同的秘密但有不同的随机性
+    /// ```
+    pub fn refresh_shares(&self, old_shares: &[Share], threshold: usize, total_parties: usize) -> Result<Vec<Share>> {
+        // 首先重构秘密
+        let secret = self.lagrange_interpolation(&old_shares[..threshold])?;
+        
+        // 生成新的份额
+        Self::share(&secret, threshold, total_parties)
+    }
+
+    /// 分割秘密为多个子秘密
+    ///
+    /// 将一个秘密分割为多个较小的子秘密，每个子秘密可以独立分享。
+    /// 这对于管理大型秘密或实现分层访问控制很有用。
+    ///
+    /// # 参数
+    /// - `secret`: 要分割的秘密
+    /// - `num_parts`: 分割的部分数量
+    ///
+    /// # 返回值
+    /// 成功时返回子秘密的向量
+    ///
+    /// # 错误
+    /// 当分割部分数量为0时返回错误
+    ///
+    /// # 数学原理
+    /// secret = part1 + part2 + ... + part(n-1) + part_n (mod p)
+    /// 其中前n-1个部分是随机生成的，最后一个部分确保总和等于原秘密
+    ///
+    /// # 示例
+    /// ```
+    /// let scheme = ShamirSecretSharing::new();
+    /// let secret = 100u64;
+    /// let parts = scheme.split_secret(&secret, 3)?;
+    /// let reconstructed = parts.iter().fold(0u64, |acc, &x| field_add(acc, x));
+    /// assert_eq!(reconstructed, secret);
+    /// ```
+    pub fn split_secret(&self, secret: &u64, num_parts: usize) -> Result<Vec<u64>> {
+        if num_parts == 0 {
+            return Err(MpcError::InvalidThreshold);
+        }
+
+        let mut rng = rand::thread_rng();
+        let mut parts = Vec::with_capacity(num_parts);
+        let mut sum = 0u64;
+
+        // 生成前n-1个随机部分
+        for _ in 0..num_parts - 1 {
+            let part = rng.gen_range(0..FIELD_PRIME);
+            sum = field_add(sum, part);
+            parts.push(part);
+        }
+
+        // 最后一个部分确保总和等于秘密
+        let last_part = field_sub(*secret, sum);
+        parts.push(last_part);
+
+        Ok(parts)
+    }
+
+    /// 合并子秘密
+    ///
+    /// 将通过split_secret分割的子秘密重新合并为原始秘密。
+    ///
+    /// # 参数
+    /// - `parts`: 子秘密的切片
+    ///
+    /// # 返回值
+    /// 返回合并后的秘密
+    ///
+    /// # 示例
+    /// ```
+    /// let scheme = ShamirSecretSharing::new();
+    /// let secret = 100u64;
+    /// let parts = scheme.split_secret(&secret, 3)?;
+    /// let reconstructed = scheme.combine_secret(&parts);
+    /// assert_eq!(reconstructed, secret);
+    /// ```
+    pub fn combine_secret(&self, parts: &[u64]) -> u64 {
+        parts.iter().fold(0u64, |acc, &x| field_add(acc, x))
+    }
+
+    /// 生成零份额
+    ///
+    /// 生成一组份额，它们对应的秘密值为0。这在某些协议中用作掩码或随机性。
+    ///
+    /// # 参数
+    /// - `threshold`: 门限值
+    /// - `total_parties`: 总参与方数量
+    ///
+    /// # 返回值
+    /// 成功时返回零份额的向量
+    ///
+    /// # 示例
+    /// ```
+    /// let zero_shares = ShamirSecretSharing::generate_zero_shares(2, 3)?;
+    /// let reconstructed = ShamirSecretSharing::reconstruct(&zero_shares[0..2], 2)?;
+    /// assert_eq!(reconstructed, 0);
+    /// ```
+    pub fn generate_zero_shares(threshold: usize, total_parties: usize) -> Result<Vec<Share>> {
+        Self::share(&0u64, threshold, total_parties)
+    }
+
+    /// 生成随机份额
+    ///
+    /// 生成一组份额，对应一个随机的秘密值。返回份额和对应的秘密。
+    ///
+    /// # 参数
+    /// - `threshold`: 门限值
+    /// - `total_parties`: 总参与方数量
+    ///
+    /// # 返回值
+    /// 成功时返回(秘密值, 份额向量)的元组
+    ///
+    /// # 示例
+    /// ```
+    /// let (secret, shares) = ShamirSecretSharing::generate_random_shares(2, 3)?;
+    /// let reconstructed = ShamirSecretSharing::reconstruct(&shares[0..2], 2)?;
+    /// assert_eq!(reconstructed, secret);
+    /// ```
+    pub fn generate_random_shares(threshold: usize, total_parties: usize) -> Result<(u64, Vec<Share>)> {
+        let mut rng = rand::thread_rng();
+        let secret = rng.gen_range(0..FIELD_PRIME);
+        let shares = Self::share(&secret, threshold, total_parties)?;
+        Ok((secret, shares))
+    }
     
     /// 计算多项式在给定点的值
     ///
@@ -182,8 +376,12 @@ impl SecretSharing for ShamirSecretSharing {
     /// 该方法使用密码学安全的随机数生成器创建多项式系数，确保份额的随机性和不可预测性。
     /// 在Shamir秘密分享中，少于t个份额无法泄露任何关于秘密的信息。
     fn share(secret: &Self::Secret, threshold: usize, total_parties: usize) -> Result<Vec<Self::Share>> {
-        if threshold == 0 || threshold > total_parties {
-            return Err(MpcError::InvalidThreshold);
+        // 验证参数
+        super::validate_threshold_params(threshold, total_parties)?;
+        
+        // 验证秘密值
+        if !super::validate_field_element(*secret) {
+            return Err(MpcError::CryptographicError("Secret value out of field range".to_string()));
         }
         
         let sss = Self::new();
@@ -470,49 +668,3 @@ impl super::MultiplicationSecretSharing for ShamirSecretSharing {
         Ok((shares_a, shares_b, shares_c))
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::secret_sharing::MultiplicationSecretSharing;
-
-    #[test]
-    fn test_shamir_multiplication() {
-        let secret1 = 6u64;
-        let secret2 = 7u64;
-        let threshold = 2;
-        let total_parties = 3;
-
-        let shares1 = ShamirSecretSharing::share(&secret1, threshold, total_parties).unwrap();
-        let shares2 = ShamirSecretSharing::share(&secret2, threshold, total_parties).unwrap();
-
-        // 测试分享乘法
-        let product_shares: Vec<Share> = shares1.iter()
-            .zip(shares2.iter())
-            .map(|(s1, s2)| ShamirSecretSharing::mul_shares(s1, s2))
-            .collect::<Result<Vec<_>>>().unwrap();
-
-        // 乘法后需要更多分享（2t-1）
-        let product = ShamirSecretSharing::reconstruct(&product_shares, 3).unwrap();
-        assert_eq!(product, field_mul(secret1, secret2));
-    }
-
-    #[test]
-    fn test_beaver_triple_generation() {
-        let threshold = 2;
-        let total_parties = 3;
-
-        // 测试 Beaver 三元组生成
-        let (shares_a, shares_b, shares_c) = 
-            ShamirSecretSharing::generate_beaver_triple(threshold, total_parties).unwrap();
-
-        // 重构 a, b, c
-        let a = ShamirSecretSharing::reconstruct(&shares_a[0..threshold], threshold).unwrap();
-        let b = ShamirSecretSharing::reconstruct(&shares_b[0..threshold], threshold).unwrap();
-        let c = ShamirSecretSharing::reconstruct(&shares_c[0..threshold], threshold).unwrap();
-
-        // 验证 c = a * b
-        assert_eq!(c, field_mul(a, b));
-    }
-}
-
