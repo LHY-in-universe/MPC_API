@@ -1,5 +1,30 @@
 //! # 高级协议工作示例
 //! 
+//! ## Bash 测试代码
+//! 
+//! ```bash
+//! # 编译检查
+//! cargo check --example working_advanced_protocols
+//! 
+//! # 运行高级协议示例
+//! cargo run --example working_advanced_protocols
+//! 
+//! # 运行所有测试
+//! cargo test --example working_advanced_protocols
+//! 
+//! # 运行特定协议测试
+//! cargo test test_hash_commitment_examples
+//! cargo test test_pedersen_commitment_examples
+//! cargo test test_merkle_tree_examples
+//! cargo test test_application_scenarios
+//! 
+//! # 性能基准测试
+//! cargo bench --bench mpc_benchmarks -- advanced_protocols
+//! 
+//! # 生成高级协议文档
+//! cargo doc --example working_advanced_protocols --open
+//! ```
+//! 
 //! 展示MPC API中高级协议的实际使用方法，所有示例都可以编译和运行。
 
 use mpc_api::{*, Result};

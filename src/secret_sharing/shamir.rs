@@ -25,8 +25,26 @@
 
 use super::{Share, SecretSharing, AdditiveSecretSharing, FIELD_PRIME, field_add, field_sub, field_mul, field_inv};
 use crate::{MpcError, Result};
-use rand::Rng;
+use rand::{Rng, SeedableRng};
+use rand::rngs::StdRng;
 // use serde::{Deserialize, Serialize}; // Commented out unused imports
+
+/// 横坐标选择策略
+#[derive(Debug, Clone, Copy)]
+pub enum XCoordinateStrategy {
+    /// 顺序选择：x = 1, 2, 3, ...
+    Sequential,
+    /// 随机选择：使用随机数生成器选择横坐标
+    Random,
+    /// 种子控制的随机选择：使用指定种子生成可重现的横坐标
+    SeededRandom(u64),
+}
+
+impl Default for XCoordinateStrategy {
+    fn default() -> Self {
+        XCoordinateStrategy::Sequential
+    }
+}
 
 /// Shamir秘密分享方案实现
 ///
@@ -252,9 +270,10 @@ impl ShamirSecretSharing {
         Ok((secret, shares))
     }
     
-    /// 计算多项式在给定点的值
+    /// 计算多项式在给定点的值（霍纳方法）
     ///
     /// 使用霍纳方法（Horner's method）高效计算多项式f(x) = a₀ + a₁x + a₂x² + ... + aₙx^n的值。
+    /// 霍纳方法通过重新组织计算顺序减少乘法次数，提高计算效率。
     ///
     /// # 参数
     /// - `coefficients`: 多项式系数数组，从常数项开始
@@ -263,22 +282,515 @@ impl ShamirSecretSharing {
     /// # 返回值
     /// 返回多项式在点x处的值
     ///
+    /// # 算法复杂度
+    /// - 时间复杂度：O(n)，其中n是多项式的度数
+    /// - 空间复杂度：O(1)
+    ///
     /// # 示例
     /// ```
     /// let scheme = ShamirSecretSharing::new();
     /// let coeffs = vec![5, 3, 2]; // f(x) = 5 + 3x + 2x²
-    /// let result = scheme.evaluate_polynomial(&coeffs, 2); // f(2) = 5 + 6 + 8 = 19
+    /// let result = scheme.evaluate_polynomial(&coeffs, 2); // f(2) = 19
     /// ```
-    fn evaluate_polynomial(&self, coefficients: &[u64], x: u64) -> u64 {
-        let mut result = 0u64;
-        let mut x_power = 1u64;
+    pub fn evaluate_polynomial(&self, coefficients: &[u64], x: u64) -> u64 {
+        if coefficients.is_empty() {
+            return 0;
+        }
         
-        for &coeff in coefficients {
-            result = field_add(result, field_mul(coeff, x_power));
-            x_power = field_mul(x_power, x);
+        // 霍纳方法：从最高次项开始，逆向计算
+        // f(x) = a₀ + x(a₁ + x(a₂ + x(a₃ + ...)))
+        let mut result = coefficients[coefficients.len() - 1];
+        
+        for &coeff in coefficients.iter().rev().skip(1) {
+            result = field_add(field_mul(result, x), coeff);
         }
         
         result
+    }
+    
+    
+    /// 快速多项式更新 - 添加新系数
+    ///
+    /// 高效地更新现有多项式，添加新的系数项。这比重新构造整个多项式要快。
+    /// 适用于动态调整秘密分享参数的场景。
+    ///
+    /// # 参数
+    /// - `old_coefficients`: 原有的多项式系数
+    /// - `new_coefficient`: 要添加的新系数
+    /// - `degree`: 新系数对应的度数
+    ///
+    /// # 返回值
+    /// 返回更新后的多项式系数
+    ///
+    /// # 示例
+    /// ```
+    /// let scheme = ShamirSecretSharing::new();
+    /// let old_coeffs = vec![5, 3];  // f(x) = 5 + 3x
+    /// let new_coeffs = scheme.update_polynomial(&old_coeffs, 2, 2);  // 添加 2x²
+    /// // 结果: f(x) = 5 + 3x + 2x²
+    /// ```
+    pub fn update_polynomial(&self, old_coefficients: &[u64], new_coefficient: u64, degree: usize) -> Vec<u64> {
+        let mut coefficients = old_coefficients.to_vec();
+        
+        // 确保数组大小足够
+        if coefficients.len() <= degree {
+            coefficients.resize(degree + 1, 0);
+        }
+        
+        // 添加新系数（在有限域中进行加法）
+        coefficients[degree] = field_add(coefficients[degree], new_coefficient);
+        
+        coefficients
+    }
+    
+    /// 多项式合并 - 两个多项式相加
+    ///
+    /// 高效地合并两个多项式，计算它们的和。这在多方计算中经常用到。
+    ///
+    /// # 参数
+    /// - `poly1`: 第一个多项式的系数
+    /// - `poly2`: 第二个多项式的系数
+    ///
+    /// # 返回值
+    /// 返回两个多项式和的系数
+    ///
+    /// # 示例
+    /// ```
+    /// let scheme = ShamirSecretSharing::new();
+    /// let p1 = vec![1, 2, 3];  // 1 + 2x + 3x²
+    /// let p2 = vec![4, 5];     // 4 + 5x
+    /// let sum = scheme.merge_polynomials(&p1, &p2);  // 5 + 7x + 3x²
+    /// ```
+    pub fn merge_polynomials(&self, poly1: &[u64], poly2: &[u64]) -> Vec<u64> {
+        let max_len = poly1.len().max(poly2.len());
+        let mut result = Vec::with_capacity(max_len);
+        
+        for i in 0..max_len {
+            let c1 = poly1.get(i).cloned().unwrap_or(0);
+            let c2 = poly2.get(i).cloned().unwrap_or(0);
+            result.push(field_add(c1, c2));
+        }
+        
+        result
+    }
+    
+    /// 增量式份额更新
+    ///
+    /// 基于现有份额和多项式更新，高效地计算新的份额值。
+    /// 避免重新计算整个多项式，只计算增量部分。
+    ///
+    /// # 参数
+    /// - `old_shares`: 现有的份额
+    /// - `delta_coefficients`: 多项式变化的系数
+    ///
+    /// # 返回值
+    /// 返回更新后的份额
+    ///
+    /// # 示例
+    /// ```
+    /// let scheme = ShamirSecretSharing::new();
+    /// let old_shares = vec![Share::new(1, 10), Share::new(2, 15)];
+    /// let delta = vec![0, 5];  // 添加 5x 项
+    /// let new_shares = scheme.incremental_share_update(&old_shares, &delta);
+    /// ```
+    pub fn incremental_share_update(&self, old_shares: &[Share], delta_coefficients: &[u64]) -> Vec<Share> {
+        old_shares.iter().map(|share| {
+            let delta_value = self.evaluate_polynomial(delta_coefficients, share.x);
+            let new_y = field_add(share.y, delta_value);
+            Share::new(share.x, new_y)
+        }).collect()
+    }
+    
+    /// 快速份额验证 - 使用多项式一致性检查
+    ///
+    /// 通过检查份额是否满足多项式关系来快速验证份额的一致性。
+    /// 比完整重构验证要快得多。
+    ///
+    /// # 参数
+    /// - `shares`: 要验证的份额
+    /// - `threshold`: 预期的门限值
+    ///
+    /// # 返回值
+    /// 如果份额一致返回true，否则返回false
+    ///
+    /// # 算法
+    /// 使用差分检验法，检查相邻份额之间的差值是否符合多项式规律
+    pub fn fast_share_consistency_check(&self, shares: &[Share], threshold: usize) -> bool {
+        if shares.len() < threshold {
+            return false;
+        }
+        
+        // 如果只有门限数量的份额，直接尝试重构
+        if shares.len() == threshold {
+            return self.lagrange_interpolation(shares).is_ok();
+        }
+        
+        // 使用多个子集重构，检查结果一致性
+        let mut previous_secret = None;
+        
+        for i in 0..=(shares.len() - threshold) {
+            let subset = &shares[i..i + threshold];
+            if let Ok(secret) = self.lagrange_interpolation(subset) {
+                if let Some(prev) = previous_secret {
+                    if prev != secret {
+                        return false;
+                    }
+                } else {
+                    previous_secret = Some(secret);
+                }
+            } else {
+                return false;
+            }
+        }
+        
+        true
+    }
+    
+    /// 生成横坐标序列
+    ///
+    /// 根据指定的策略生成份额的横坐标。支持顺序、随机和种子控制的生成方式。
+    ///
+    /// # 参数
+    /// - `total_parties`: 参与方总数
+    /// - `strategy`: 横坐标选择策略
+    ///
+    /// # 返回值
+    /// 返回生成的横坐标向量
+    ///
+    /// # 安全性
+    /// - 确保生成的横坐标在有效范围内且不重复
+    /// - 种子控制的生成方式提供可重现性
+    ///
+    /// # 示例
+    /// ```
+    /// let scheme = ShamirSecretSharing::new();
+    /// let x_coords = scheme.generate_x_coordinates(5, XCoordinateStrategy::Sequential);
+    /// // 结果: [1, 2, 3, 4, 5]
+    /// 
+    /// let seeded_coords = scheme.generate_x_coordinates(5, XCoordinateStrategy::SeededRandom(12345));
+    /// // 结果: 可重现的随机坐标序列
+    /// ```
+    pub fn generate_x_coordinates(&self, total_parties: usize, strategy: XCoordinateStrategy) -> Vec<u64> {
+        match strategy {
+            XCoordinateStrategy::Sequential => {
+                (1..=total_parties as u64).collect()
+            }
+            
+            XCoordinateStrategy::Random => {
+                let mut rng = rand::thread_rng();
+                let mut coords = Vec::with_capacity(total_parties);
+                let mut used_coords = std::collections::HashSet::new();
+                
+                while coords.len() < total_parties {
+                    // 生成范围在 [1, FIELD_PRIME) 的随机横坐标
+                    let x = rng.gen_range(1..FIELD_PRIME);
+                    if used_coords.insert(x) {
+                        coords.push(x);
+                    }
+                }
+                
+                coords
+            }
+            
+            XCoordinateStrategy::SeededRandom(seed) => {
+                let mut rng = StdRng::seed_from_u64(seed);
+                let mut coords = Vec::with_capacity(total_parties);
+                let mut used_coords = std::collections::HashSet::new();
+                
+                while coords.len() < total_parties {
+                    // 使用种子生成可重现的随机横坐标
+                    let x = rng.gen_range(1..FIELD_PRIME);
+                    if used_coords.insert(x) {
+                        coords.push(x);
+                    }
+                }
+                
+                coords
+            }
+        }
+    }
+    
+    /// 使用指定横坐标策略分享秘密
+    ///
+    /// 提供对横坐标生成策略的完全控制，支持确定性和随机性选择。
+    ///
+    /// # 参数
+    /// - `secret`: 要分享的秘密值
+    /// - `threshold`: 重构所需的最小份额数量
+    /// - `total_parties`: 参与方总数
+    /// - `strategy`: 横坐标选择策略
+    ///
+    /// # 返回值
+    /// 成功时返回包含份额的向量
+    ///
+    /// # 错误
+    /// 当参数无效时返回相应错误
+    ///
+    /// # 示例
+    /// ```
+    /// let scheme = ShamirSecretSharing::new();
+    /// let secret = 42u64;
+    /// 
+    /// // 使用顺序横坐标
+    /// let shares1 = scheme.share_with_coordinates(&secret, 2, 3, XCoordinateStrategy::Sequential)?;
+    /// 
+    /// // 使用种子控制的随机横坐标
+    /// let shares2 = scheme.share_with_coordinates(&secret, 2, 3, XCoordinateStrategy::SeededRandom(12345))?;
+    /// 
+    /// // 两次使用相同种子会生成相同的横坐标
+    /// let shares3 = scheme.share_with_coordinates(&secret, 2, 3, XCoordinateStrategy::SeededRandom(12345))?;
+    /// assert_eq!(shares2[0].x, shares3[0].x); // 横坐标相同
+    /// ```
+    pub fn share_with_coordinates(&self, secret: &u64, threshold: usize, total_parties: usize, 
+                                 strategy: XCoordinateStrategy) -> Result<Vec<Share>> {
+        // 验证参数
+        super::validate_threshold_params(threshold, total_parties)?;
+        
+        if !super::validate_field_element(*secret) {
+            return Err(MpcError::CryptographicError("Secret value out of field range".to_string()));
+        }
+        
+        // 生成横坐标
+        let x_coordinates = self.generate_x_coordinates(total_parties, strategy);
+        
+        // 生成多项式系数
+        let mut coefficients = Vec::with_capacity(threshold);
+        coefficients.push(*secret); // a_0 = secret
+        
+        match strategy {
+            XCoordinateStrategy::SeededRandom(seed) => {
+                // 如果使用种子控制横坐标，也使用相同种子的另一个生成器来生成系数
+                // 这样整个分享过程都是确定的
+                let mut rng = StdRng::seed_from_u64(seed.wrapping_add(1));
+                for _ in 1..threshold {
+                    let coeff = rng.gen_range(0..FIELD_PRIME);
+                    coefficients.push(coeff);
+                }
+            }
+            _ => {
+                let mut rng = rand::thread_rng();
+                for _ in 1..threshold {
+                    let coeff = rng.gen_range(0..FIELD_PRIME);
+                    coefficients.push(coeff);
+                }
+            }
+        }
+        
+        // 计算份额
+        let mut shares = Vec::with_capacity(total_parties);
+        for &x in &x_coordinates {
+            let y = self.evaluate_polynomial(&coefficients, x);
+            shares.push(Share::new(x, y));
+        }
+        
+        Ok(shares)
+    }
+    
+    /// 使用种子控制生成确定性份额
+    ///
+    /// 这是一个便利方法，专门用于生成完全确定的份额（包括横坐标和多项式系数）。
+    ///
+    /// # 参数
+    /// - `secret`: 要分享的秘密值
+    /// - `threshold`: 重构所需的最小份额数量
+    /// - `total_parties`: 参与方总数
+    /// - `seed`: 随机数种子
+    ///
+    /// # 返回值
+    /// 成功时返回包含份额的向量
+    ///
+    /// # 特性
+    /// - 完全确定性：相同输入始终产生相同输出
+    /// - 可重现性：适用于测试和调试
+    /// - 安全性：保持Shamir方案的数学安全性
+    ///
+    /// # 示例
+    /// ```
+    /// let scheme = ShamirSecretSharing::new();
+    /// let secret = 123u64;
+    /// let seed = 54321u64;
+    /// 
+    /// let shares1 = scheme.deterministic_share(&secret, 2, 3, seed)?;
+    /// let shares2 = scheme.deterministic_share(&secret, 2, 3, seed)?;
+    /// 
+    /// // 两次生成的份额完全相同
+    /// assert_eq!(shares1, shares2);
+    /// ```
+    pub fn deterministic_share(&self, secret: &u64, threshold: usize, total_parties: usize, 
+                              seed: u64) -> Result<Vec<Share>> {
+        self.share_with_coordinates(secret, threshold, total_parties, XCoordinateStrategy::SeededRandom(seed))
+    }
+    
+    /// 预计算拉格朗日系数
+    ///
+    /// 预计算给定x坐标组合的拉格朗日系数，用于快速重构。
+    /// 适用于重复使用相同份额组合进行重构的场景。
+    ///
+    /// # 参数
+    /// - `x_coords`: 参与重构的x坐标
+    ///
+    /// # 返回值
+    /// 返回预计算的拉格朗日系数
+    ///
+    /// # 示例
+    /// ```
+    /// let scheme = ShamirSecretSharing::new();
+    /// let x_coords = vec![1, 2, 3];
+    /// let lagrange_coeffs = scheme.precompute_lagrange_coefficients(&x_coords)?;
+    /// ```
+    pub fn precompute_lagrange_coefficients(&self, x_coords: &[u64]) -> Result<Vec<u64>> {
+        let mut coefficients = Vec::with_capacity(x_coords.len());
+        
+        for i in 0..x_coords.len() {
+            let mut numerator = 1u64;
+            let mut denominator = 1u64;
+            
+            for j in 0..x_coords.len() {
+                if i != j {
+                    // 计算 (0 - x_j) 和 (x_i - x_j)
+                    let neg_xj = field_sub(0, x_coords[j]);
+                    numerator = field_mul(numerator, neg_xj);
+                    
+                    let diff = field_sub(x_coords[i], x_coords[j]);
+                    denominator = field_mul(denominator, diff);
+                }
+            }
+            
+            let denominator_inv = field_inv(denominator)
+                .ok_or_else(|| MpcError::CryptographicError("No modular inverse exists".to_string()))?;
+            let coeff = field_mul(numerator, denominator_inv);
+            coefficients.push(coeff);
+        }
+        
+        Ok(coefficients)
+    }
+    
+    /// 使用预计算系数快速重构
+    ///
+    /// 使用预先计算的拉格朗日系数快速重构秘密，避免重复计算。
+    ///
+    /// # 参数
+    /// - `shares`: 参与重构的份额
+    /// - `lagrange_coeffs`: 预计算的拉格朗日系数
+    ///
+    /// # 返回值
+    /// 返回重构的秘密
+    ///
+    /// # 前提条件
+    /// lagrange_coeffs必须与shares的x坐标对应
+    ///
+    /// # 示例
+    /// ```
+    /// let scheme = ShamirSecretSharing::new();
+    /// let shares = vec![Share::new(1, 10), Share::new(2, 15)];
+    /// let x_coords = vec![1, 2];
+    /// let coeffs = scheme.precompute_lagrange_coefficients(&x_coords)?;
+    /// let secret = scheme.fast_reconstruct_with_coeffs(&shares, &coeffs);
+    /// ```
+    pub fn fast_reconstruct_with_coeffs(&self, shares: &[Share], lagrange_coeffs: &[u64]) -> u64 {
+        if shares.len() != lagrange_coeffs.len() {
+            return 0; // 错误处理：长度不匹配
+        }
+        
+        let mut result = 0u64;
+        for (share, &coeff) in shares.iter().zip(lagrange_coeffs.iter()) {
+            result = field_add(result, field_mul(share.y, coeff));
+        }
+        
+        result
+    }
+    
+    /// 动态阈值调整
+    ///
+    /// 在不改变秘密的情况下，调整份额的阈值。这通过重新分发份额实现。
+    /// 适用于安全需求变化的场景。
+    ///
+    /// # 参数
+    /// - `shares`: 现有份额
+    /// - `old_threshold`: 原阈值
+    /// - `new_threshold`: 新阈值
+    /// - `new_total_parties`: 新的参与方总数
+    ///
+    /// # 返回值
+    /// 返回调整后的份额
+    ///
+    /// # 算法
+    /// 1. 使用现有份额重构秘密
+    /// 2. 使用新参数重新分享秘密
+    ///
+    /// # 示例
+    /// ```
+    /// let scheme = ShamirSecretSharing::new();
+    /// let old_shares = // ... 现有的(2,3)份额
+    /// let new_shares = scheme.adjust_threshold(&old_shares, 2, 3, 5)?;
+    /// // 现在是(3,5)份额
+    /// ```
+    pub fn adjust_threshold(&self, shares: &[Share], old_threshold: usize, 
+                           new_threshold: usize, new_total_parties: usize) -> Result<Vec<Share>> {
+        // 验证参数
+        if shares.len() < old_threshold {
+            return Err(MpcError::InsufficientShares);
+        }
+        
+        // 重构秘密
+        let secret = self.lagrange_interpolation(&shares[..old_threshold])?;
+        
+        // 使用新参数重新分享
+        Self::share(&secret, new_threshold, new_total_parties)
+    }
+    
+    /// 份额压缩存储
+    ///
+    /// 将多个份额压缩为紧凑格式，减少存储空间。
+    /// 适用于大规模部署中的存储优化。
+    ///
+    /// # 参数
+    /// - `shares`: 要压缩的份额
+    ///
+    /// # 返回值
+    /// 返回压缩后的字节数组
+    ///
+    /// # 格式
+    /// 每个份额使用16字节：8字节x坐标 + 8字节y坐标
+    pub fn compress_shares(&self, shares: &[Share]) -> Vec<u8> {
+        let mut compressed = Vec::with_capacity(shares.len() * 16);
+        
+        for share in shares {
+            compressed.extend_from_slice(&share.x.to_le_bytes());
+            compressed.extend_from_slice(&share.y.to_le_bytes());
+        }
+        
+        compressed
+    }
+    
+    /// 份额解压缩
+    ///
+    /// 从压缩格式恢复份额数据。
+    ///
+    /// # 参数
+    /// - `compressed_data`: 压缩的字节数据
+    ///
+    /// # 返回值
+    /// 返回解压缩的份额
+    ///
+    /// # 错误
+    /// 如果数据长度不是16的倍数，返回错误
+    pub fn decompress_shares(&self, compressed_data: &[u8]) -> Result<Vec<Share>> {
+        if compressed_data.len() % 16 != 0 {
+            return Err(MpcError::CryptographicError("Invalid compressed data length".to_string()));
+        }
+        
+        let mut shares = Vec::with_capacity(compressed_data.len() / 16);
+        
+        for chunk in compressed_data.chunks(16) {
+            let x = u64::from_le_bytes(chunk[0..8].try_into()
+                .map_err(|_| MpcError::CryptographicError("Invalid x coordinate".to_string()))?);
+            let y = u64::from_le_bytes(chunk[8..16].try_into()
+                .map_err(|_| MpcError::CryptographicError("Invalid y coordinate".to_string()))?);
+            shares.push(Share::new(x, y));
+        }
+        
+        Ok(shares)
     }
     
     /// 使用拉格朗日插值法重构秘密
@@ -306,7 +818,7 @@ impl ShamirSecretSharing {
     /// let shares = vec![Share::new(1, 10), Share::new(2, 15), Share::new(3, 22)];
     /// let secret = scheme.lagrange_interpolation(&shares)?;
     /// ```
-    fn lagrange_interpolation(&self, shares: &[Share]) -> Result<u64> {
+    pub fn lagrange_interpolation(&self, shares: &[Share]) -> Result<u64> {
         if shares.is_empty() {
             return Err(MpcError::InsufficientShares);
         }
@@ -539,6 +1051,404 @@ impl AdditiveSecretSharing for ShamirSecretSharing {
     fn scalar_mul(share: &Self::Share, scalar: &Self::Secret) -> Result<Self::Share> {
         let y = field_mul(share.y, *scalar);
         Ok(Share::new(share.x, y))
+    }
+}
+
+/// 高级Shamir秘密分享的测试模块
+#[cfg(test)]
+mod advanced_tests {
+    use super::*;
+    use crate::secret_sharing::{Share, field_add};
+    
+    #[test]
+    fn test_horner_polynomial_evaluation() {
+        let scheme = ShamirSecretSharing::new();
+        let coeffs = vec![5, 3, 2]; // f(x) = 5 + 3x + 2x²
+        
+        // f(2) = 5 + 3*2 + 2*4 = 5 + 6 + 8 = 19
+        let result = scheme.evaluate_polynomial(&coeffs, 2);
+        assert_eq!(result, 19);
+        
+        // f(0) = 5
+        let result = scheme.evaluate_polynomial(&coeffs, 0);
+        assert_eq!(result, 5);
+    }
+    
+    #[test]
+    fn test_multiple_polynomial_evaluation() {
+        let scheme = ShamirSecretSharing::new();
+        let coeffs = vec![5, 3, 2]; // f(x) = 5 + 3x + 2x²
+        let x_values = vec![0, 1, 2, 3];
+        
+        // 单独计算每个点的值
+        let mut results = Vec::new();
+        for &x in &x_values {
+            results.push(scheme.evaluate_polynomial(&coeffs, x));
+        }
+        
+        // 验证每个点的值
+        assert_eq!(results[0], 5);  // f(0) = 5
+        assert_eq!(results[1], 10); // f(1) = 5 + 3 + 2 = 10
+        assert_eq!(results[2], 19); // f(2) = 5 + 6 + 8 = 19
+        assert_eq!(results[3], 32); // f(3) = 5 + 9 + 18 = 32
+    }
+    
+    #[test]
+    fn test_polynomial_update() {
+        let scheme = ShamirSecretSharing::new();
+        let old_coeffs = vec![5, 3]; // f(x) = 5 + 3x
+        
+        // 添加 2x² 项
+        let new_coeffs = scheme.update_polynomial(&old_coeffs, 2, 2);
+        assert_eq!(new_coeffs, vec![5, 3, 2]);
+        
+        // 更新常数项
+        let updated_coeffs = scheme.update_polynomial(&new_coeffs, 10, 0);
+        assert_eq!(updated_coeffs[0], field_add(5, 10));
+    }
+    
+    #[test]
+    fn test_polynomial_merging() {
+        let scheme = ShamirSecretSharing::new();
+        let poly1 = vec![1, 2, 3]; // 1 + 2x + 3x²
+        let poly2 = vec![4, 5];    // 4 + 5x
+        
+        let merged = scheme.merge_polynomials(&poly1, &poly2);
+        assert_eq!(merged, vec![5, 7, 3]); // 5 + 7x + 3x²
+    }
+    
+    #[test]
+    fn test_incremental_share_update() {
+        let scheme = ShamirSecretSharing::new();
+        let old_shares = vec![
+            Share::new(1, 10),
+            Share::new(2, 15),
+            Share::new(3, 20)
+        ];
+        
+        let delta_coeffs = vec![0, 5]; // 添加 5x 项
+        let new_shares = scheme.incremental_share_update(&old_shares, &delta_coeffs);
+        
+        // 验证更新后的值
+        assert_eq!(new_shares[0].y, field_add(10, 5)); // 10 + 5*1
+        assert_eq!(new_shares[1].y, field_add(15, 10)); // 15 + 5*2
+        assert_eq!(new_shares[2].y, field_add(20, 15)); // 20 + 5*3
+    }
+    
+    #[test]
+    fn test_multiple_secret_sharing() {
+        let _scheme = ShamirSecretSharing::new();
+        let secrets = vec![100, 200, 300];
+        
+        // 分别生成每个秘密的份额
+        let mut all_shares = Vec::new();
+        for &secret in &secrets {
+            let shares = ShamirSecretSharing::share(&secret, 2, 3).unwrap();
+            all_shares.push(shares);
+        }
+        assert_eq!(all_shares.len(), 3);
+        
+        // 验证每组份额都能正确重构对应的秘密
+        for (i, shares) in all_shares.iter().enumerate() {
+            assert_eq!(shares.len(), 3);
+            let reconstructed = ShamirSecretSharing::reconstruct(&shares[..2], 2).unwrap();
+            assert_eq!(reconstructed, secrets[i]);
+        }
+    }
+    
+    #[test]
+    fn test_precompute_lagrange_coefficients() {
+        let scheme = ShamirSecretSharing::new();
+        let x_coords = vec![1, 2, 3];
+        
+        let coeffs = scheme.precompute_lagrange_coefficients(&x_coords).unwrap();
+        assert_eq!(coeffs.len(), 3);
+        
+        // 使用预计算系数重构
+        let shares = vec![
+            Share::new(1, 10),
+            Share::new(2, 20),
+            Share::new(3, 30)
+        ];
+        
+        let secret1 = scheme.lagrange_interpolation(&shares).unwrap();
+        let secret2 = scheme.fast_reconstruct_with_coeffs(&shares, &coeffs);
+        assert_eq!(secret1, secret2);
+    }
+    
+    #[test]
+    fn test_threshold_adjustment() {
+        let scheme = ShamirSecretSharing::new();
+        let secret = 42u64;
+        
+        // 创建 (2,3) 份额
+        let old_shares = ShamirSecretSharing::share(&secret, 2, 3).unwrap();
+        
+        // 调整为 (3,5) 份额
+        let new_shares = scheme.adjust_threshold(&old_shares, 2, 3, 5).unwrap();
+        assert_eq!(new_shares.len(), 5);
+        
+        // 验证新份额能正确重构
+        let reconstructed = ShamirSecretSharing::reconstruct(&new_shares[..3], 3).unwrap();
+        assert_eq!(reconstructed, secret);
+    }
+    
+    #[test]
+    fn test_share_compression() {
+        let scheme = ShamirSecretSharing::new();
+        let shares = vec![
+            Share::new(1, 100),
+            Share::new(2, 200),
+            Share::new(3, 300)
+        ];
+        
+        // 压缩和解压缩
+        let compressed = scheme.compress_shares(&shares);
+        assert_eq!(compressed.len(), 48); // 3 shares * 16 bytes each
+        
+        let decompressed = scheme.decompress_shares(&compressed).unwrap();
+        assert_eq!(decompressed, shares);
+    }
+    
+    #[test]
+    fn test_fast_consistency_check() {
+        let scheme = ShamirSecretSharing::new();
+        let secret = 123u64;
+        let shares = ShamirSecretSharing::share(&secret, 2, 4).unwrap();
+        
+        // 有效份额应该通过一致性检查
+        assert!(scheme.fast_share_consistency_check(&shares, 2));
+        
+        // 修改一个份额，应该失败
+        let mut invalid_shares = shares.clone();
+        invalid_shares[0].y = field_add(invalid_shares[0].y, 1);
+        assert!(!scheme.fast_share_consistency_check(&invalid_shares, 2));
+    }
+    
+    #[test]
+    fn test_performance_comparison() {
+        let scheme = ShamirSecretSharing::new();
+        let x_coords = vec![1, 2, 3];
+        let shares = vec![
+            Share::new(1, 12345),
+            Share::new(2, 23456),
+            Share::new(3, 34567)
+        ];
+        
+        // 预计算系数
+        let coeffs = scheme.precompute_lagrange_coefficients(&x_coords).unwrap();
+        
+        // 多次重构测试性能提升
+        for _ in 0..1000 {
+            let secret1 = scheme.lagrange_interpolation(&shares).unwrap();
+            let secret2 = scheme.fast_reconstruct_with_coeffs(&shares, &coeffs);
+            assert_eq!(secret1, secret2);
+        }
+    }
+
+    #[test]
+    fn test_coordinate_strategy_sequential() {
+        let scheme = ShamirSecretSharing::new();
+        let coords = scheme.generate_x_coordinates(5, XCoordinateStrategy::Sequential);
+        
+        assert_eq!(coords.len(), 5);
+        assert_eq!(coords, vec![1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn test_coordinate_strategy_random() {
+        let scheme = ShamirSecretSharing::new();
+        let coords1 = scheme.generate_x_coordinates(5, XCoordinateStrategy::Random);
+        let coords2 = scheme.generate_x_coordinates(5, XCoordinateStrategy::Random);
+        
+        assert_eq!(coords1.len(), 5);
+        assert_eq!(coords2.len(), 5);
+        
+        // 随机生成的坐标应该不同
+        assert_ne!(coords1, coords2);
+        
+        // 确保没有重复坐标
+        let mut unique_coords = std::collections::HashSet::new();
+        for &coord in &coords1 {
+            assert!(unique_coords.insert(coord), "Duplicate coordinate found: {}", coord);
+        }
+    }
+
+    #[test]
+    fn test_coordinate_strategy_seeded_random() {
+        let scheme = ShamirSecretSharing::new();
+        let seed = 12345u64;
+        
+        // 使用相同种子生成的坐标应该相同
+        let coords1 = scheme.generate_x_coordinates(5, XCoordinateStrategy::SeededRandom(seed));
+        let coords2 = scheme.generate_x_coordinates(5, XCoordinateStrategy::SeededRandom(seed));
+        
+        assert_eq!(coords1.len(), 5);
+        assert_eq!(coords2.len(), 5);
+        assert_eq!(coords1, coords2);
+        
+        // 使用不同种子应该生成不同坐标
+        let coords3 = scheme.generate_x_coordinates(5, XCoordinateStrategy::SeededRandom(54321));
+        assert_ne!(coords1, coords3);
+        
+        // 确保坐标在有效范围内
+        for &coord in &coords1 {
+            assert!(coord > 0 && coord < FIELD_PRIME);
+        }
+    }
+
+    #[test]
+    fn test_share_with_coordinates_sequential() {
+        let scheme = ShamirSecretSharing::new();
+        let secret = 42u64;
+        let threshold = 2;
+        let total_parties = 3;
+        
+        let shares = scheme.share_with_coordinates(&secret, threshold, total_parties, 
+                                                  XCoordinateStrategy::Sequential).unwrap();
+        
+        assert_eq!(shares.len(), total_parties);
+        assert_eq!(shares[0].x, 1);
+        assert_eq!(shares[1].x, 2);
+        assert_eq!(shares[2].x, 3);
+        
+        // 验证能够正确重构
+        let reconstructed = ShamirSecretSharing::reconstruct(&shares[..threshold], threshold).unwrap();
+        assert_eq!(reconstructed, secret);
+    }
+
+    #[test]
+    fn test_share_with_coordinates_seeded_deterministic() {
+        let scheme = ShamirSecretSharing::new();
+        let secret = 123u64;
+        let threshold = 2;
+        let total_parties = 4;
+        let seed = 98765u64;
+        
+        // 使用相同种子生成两次份额
+        let shares1 = scheme.share_with_coordinates(&secret, threshold, total_parties, 
+                                                   XCoordinateStrategy::SeededRandom(seed)).unwrap();
+        let shares2 = scheme.share_with_coordinates(&secret, threshold, total_parties, 
+                                                   XCoordinateStrategy::SeededRandom(seed)).unwrap();
+        
+        assert_eq!(shares1.len(), total_parties);
+        assert_eq!(shares2.len(), total_parties);
+        
+        // 横坐标应该相同（确定性）
+        for i in 0..total_parties {
+            assert_eq!(shares1[i].x, shares2[i].x);
+        }
+        
+        // 份额值也应该相同（完全确定性）
+        for i in 0..total_parties {
+            assert_eq!(shares1[i].y, shares2[i].y);
+        }
+        
+        // 验证两组份额都能正确重构
+        let reconstructed1 = ShamirSecretSharing::reconstruct(&shares1[..threshold], threshold).unwrap();
+        let reconstructed2 = ShamirSecretSharing::reconstruct(&shares2[..threshold], threshold).unwrap();
+        assert_eq!(reconstructed1, secret);
+        assert_eq!(reconstructed2, secret);
+    }
+
+    #[test]
+    fn test_deterministic_share_convenience_method() {
+        let scheme = ShamirSecretSharing::new();
+        let secret = 456u64;
+        let threshold = 3;
+        let total_parties = 5;
+        let seed = 11111u64;
+        
+        // 使用便捷方法生成确定性份额
+        let shares1 = scheme.deterministic_share(&secret, threshold, total_parties, seed).unwrap();
+        let shares2 = scheme.deterministic_share(&secret, threshold, total_parties, seed).unwrap();
+        
+        assert_eq!(shares1.len(), total_parties);
+        assert_eq!(shares2.len(), total_parties);
+        
+        // 完全相同的份额
+        for i in 0..total_parties {
+            assert_eq!(shares1[i].x, shares2[i].x);
+            assert_eq!(shares1[i].y, shares2[i].y);
+        }
+        
+        // 验证重构
+        let reconstructed = ShamirSecretSharing::reconstruct(&shares1[..threshold], threshold).unwrap();
+        assert_eq!(reconstructed, secret);
+    }
+
+    #[test]
+    fn test_different_seeds_produce_different_coordinates() {
+        let scheme = ShamirSecretSharing::new();
+        let secret = 789u64;
+        let threshold = 2;
+        let total_parties = 3;
+        
+        let shares1 = scheme.share_with_coordinates(&secret, threshold, total_parties, 
+                                                   XCoordinateStrategy::SeededRandom(1111)).unwrap();
+        let shares2 = scheme.share_with_coordinates(&secret, threshold, total_parties, 
+                                                   XCoordinateStrategy::SeededRandom(2222)).unwrap();
+        
+        // 不同种子应该产生不同的横坐标
+        let mut coordinates_differ = false;
+        for i in 0..total_parties {
+            if shares1[i].x != shares2[i].x {
+                coordinates_differ = true;
+                break;
+            }
+        }
+        assert!(coordinates_differ, "Different seeds should produce different coordinates");
+        
+        // 但是都应该能正确重构相同的秘密
+        let reconstructed1 = ShamirSecretSharing::reconstruct(&shares1[..threshold], threshold).unwrap();
+        let reconstructed2 = ShamirSecretSharing::reconstruct(&shares2[..threshold], threshold).unwrap();
+        assert_eq!(reconstructed1, secret);
+        assert_eq!(reconstructed2, secret);
+    }
+
+    #[test]
+    fn test_coordinate_uniqueness() {
+        let scheme = ShamirSecretSharing::new();
+        let total_parties = 10;
+        
+        for seed in [12345, 54321, 99999] {
+            let coords = scheme.generate_x_coordinates(total_parties, 
+                                                      XCoordinateStrategy::SeededRandom(seed));
+            
+            // 验证没有重复坐标
+            let mut unique_coords = std::collections::HashSet::new();
+            for &coord in &coords {
+                assert!(unique_coords.insert(coord), 
+                       "Duplicate coordinate {} found with seed {}", coord, seed);
+            }
+            
+            assert_eq!(unique_coords.len(), total_parties);
+        }
+    }
+
+    #[test]
+    fn test_large_party_count_with_seeded_coordinates() {
+        let scheme = ShamirSecretSharing::new();
+        let secret = 999999u64;
+        let threshold = 50;
+        let total_parties = 100;
+        let seed = 777777u64;
+        
+        let shares = scheme.share_with_coordinates(&secret, threshold, total_parties, 
+                                                  XCoordinateStrategy::SeededRandom(seed)).unwrap();
+        
+        assert_eq!(shares.len(), total_parties);
+        
+        // 验证坐标唯一性
+        let mut unique_coords = std::collections::HashSet::new();
+        for share in &shares {
+            assert!(unique_coords.insert(share.x), 
+                   "Duplicate coordinate found: {}", share.x);
+        }
+        
+        // 验证重构
+        let reconstructed = ShamirSecretSharing::reconstruct(&shares[..threshold], threshold).unwrap();
+        assert_eq!(reconstructed, secret);
     }
 }
 

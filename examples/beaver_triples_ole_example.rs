@@ -4,6 +4,31 @@
 //! 协议生成 Beaver 三元组的全面教程和实际应用示例。OLE 是一种平衡了
 //! 安全性、性能和实用性的高级密码学协议。
 //! 
+//! ## Bash 测试代码
+//! 
+//! ```bash
+//! # 编译检查
+//! cargo check --example beaver_triples_ole_example
+//! 
+//! # 运行完整示例
+//! cargo run --example beaver_triples_ole_example
+//! 
+//! # 运行所有测试
+//! cargo test --example beaver_triples_ole_example
+//! 
+//! # 运行特定OLE测试
+//! cargo test test_basic_ole_beaver_example
+//! cargo test test_secure_multiplication_example
+//! cargo test test_batch_beaver_example
+//! cargo test test_comprehensive_ole_example
+//! 
+//! # OLE性能基准测试
+//! cargo bench --bench mpc_benchmarks -- ole
+//! 
+//! # 生成OLE文档
+//! cargo doc --example beaver_triples_ole_example --open
+//! ```
+//! 
 //! ## 🎯 学习目标
 //! 
 //! 通过本指南，您将学会：

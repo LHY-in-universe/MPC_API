@@ -1,5 +1,32 @@
 //! # 简单 API 使用示例
 //! 
+//! ## Bash 测试代码
+//! 
+//! ```bash
+//! # 编译检查
+//! cargo check --example simple_api_usage
+//! 
+//! # 运行简单API示例
+//! cargo run --example simple_api_usage
+//! 
+//! # 运行所有测试
+//! cargo test --example simple_api_usage
+//! 
+//! # 运行特定功能测试
+//! cargo test test_hash_commitment_demo
+//! cargo test test_pedersen_commitment_demo
+//! cargo test test_merkle_tree_demo
+//! cargo test test_hmac_demo
+//! cargo test test_field_operations_demo
+//! cargo test test_simple_key_demo
+//! 
+//! # 性能基准测试
+//! cargo bench --bench mpc_benchmarks -- simple_api
+//! 
+//! # 生成简单API文档
+//! cargo doc --example simple_api_usage --open
+//! ```
+//! 
 //! 展示 MPC API 中实际可用功能的基本使用方法。
 //! 这些示例都是可以编译和运行的。
 

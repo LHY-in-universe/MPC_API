@@ -1,5 +1,33 @@
 //! Documentation Examples for MPC API
 //! 
+//! ## Bash 测试代码
+//! 
+//! ```bash
+//! # 编译检查
+//! cargo check --example documentation_examples
+//! 
+//! # 运行文档示例
+//! cargo run --example documentation_examples
+//! 
+//! # 运行所有测试
+//! cargo test --example documentation_examples
+//! 
+//! # 运行特定文档示例测试
+//! cargo test test_basic_secret_sharing
+//! cargo test test_homomorphic_operations
+//! cargo test test_commitment_schemes
+//! cargo test test_beaver_triples
+//! cargo test test_message_authentication
+//! cargo test test_complete_mpc_protocol
+//! cargo test test_error_handling
+//! 
+//! # 文档示例性能基准测试
+//! cargo bench --bench mpc_benchmarks -- documentation
+//! 
+//! # 生成文档示例文档
+//! cargo doc --example documentation_examples --open
+//! ```
+//! 
 //! This file contains well-documented examples that demonstrate the core features
 //! of the MPC API. These examples are designed to be included in the library's
 //! documentation and serve as a reference for users.

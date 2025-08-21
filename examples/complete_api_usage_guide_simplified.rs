@@ -1,5 +1,34 @@
 //! # MPC API 完整使用指南 (简化工作版本)
 //! 
+//! ## Bash 测试代码
+//! 
+//! ```bash
+//! # 编译检查
+//! cargo check --example complete_api_usage_guide_simplified
+//! 
+//! # 运行简化完整指南
+//! cargo run --example complete_api_usage_guide_simplified
+//! 
+//! # 运行所有测试
+//! cargo test --example complete_api_usage_guide_simplified
+//! 
+//! # 运行特定模块测试
+//! cargo test test_secret_sharing_guide
+//! cargo test test_beaver_triples_guide
+//! cargo test test_commitment_guide
+//! cargo test test_authentication_guide
+//! cargo test test_field_operations_guide
+//! cargo test test_garbled_circuits_guide
+//! cargo test test_application_examples
+//! cargo test test_complete_api_guide
+//! 
+//! # 性能基准测试
+//! cargo bench --bench mpc_benchmarks -- simplified_complete
+//! 
+//! # 生成简化完整指南文档
+//! cargo doc --example complete_api_usage_guide_simplified --open
+//! ```
+//! 
 //! 本文档展示了 MPC API 中当前可用组件的使用方法，包括：
 //! 1. 秘密分享 (Secret Sharing) - ✅ 完全可用
 //! 2. Beaver 三元组 (Beaver Triples) - ✅ 完全可用

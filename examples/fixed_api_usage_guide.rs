@@ -1,5 +1,24 @@
 //! # 修复的API使用指南
 //! 
+//! ## Bash 测试代码
+//! 
+//! ```bash
+//! # 编译检查
+//! cargo check --example fixed_api_usage_guide
+//! 
+//! # 运行修复的API指南
+//! cargo run --example fixed_api_usage_guide
+//! 
+//! # 运行所有测试
+//! cargo test --example fixed_api_usage_guide
+//! 
+//! # 性能基准测试
+//! cargo bench --bench mpc_benchmarks -- fixed_api
+//! 
+//! # 生成修复API文档
+//! cargo doc --example fixed_api_usage_guide --open
+//! ```
+//! 
 //! 提供当前可用API的完整使用示例，确保所有示例都能编译和运行
 
 use mpc_api::{

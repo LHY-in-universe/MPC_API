@@ -1,5 +1,29 @@
 //! # 综合 Beaver 三元组方法对比示例
 //! 
+//! ## Bash 测试代码
+//! 
+//! ```bash
+//! # 编译检查
+//! cargo check --example comprehensive_beaver_examples
+//! 
+//! # 运行综合对比示例
+//! cargo run --example comprehensive_beaver_examples
+//! 
+//! # 运行所有测试
+//! cargo test --example comprehensive_beaver_examples
+//! 
+//! # 运行特定对比测试
+//! cargo test test_comprehensive_performance_comparison
+//! cargo test test_joint_data_analysis_scenario
+//! cargo test test_security_comparison_analysis
+//! 
+//! # Beaver三元组性能基准测试
+//! cargo bench --bench mpc_benchmarks -- comprehensive_beaver
+//! 
+//! # 生成综合对比文档
+//! cargo doc --example comprehensive_beaver_examples --open
+//! ```
+//! 
 //! 本示例综合展示和对比了三种 Beaver 三元组生成方法：
 //! 1. OLE (不经意线性求值) 方法
 //! 2. BFV (同态加密) 方法  

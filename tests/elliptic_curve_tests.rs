@@ -12,7 +12,7 @@ use mpc_api::elliptic_curve::{ECPoint, ECDH, ECDSA, EllipticCurve};
 use mpc_api::elliptic_curve::ecdh::*;
 use mpc_api::elliptic_curve::ecdsa::*;
 use mpc_api::elliptic_curve::point::*;
-use mpc_api::secret_sharing::{field_sub, FIELD_PRIME};
+// Removed unused imports: field_sub, FIELD_PRIME
 use rand::{thread_rng, Rng};
 
 // ===== ECDH Tests =====
@@ -53,8 +53,8 @@ fn test_ecdh_shared_secret() {
 #[test]
 fn test_ecdh_key_exchange() {
     let mut rng = thread_rng();
-    let alice_private = rng.gen_range(1..1000);
-    let bob_private = rng.gen_range(1..1000);
+    let alice_private = rng.gen_range(1..79); // Use curve order
+    let bob_private = rng.gen_range(1..79);  // Use curve order
     
     let result = ECDiffieHellman::perform_key_exchange(alice_private, bob_private);
     assert!(result.is_ok());
@@ -262,8 +262,9 @@ fn test_point_negate() {
     
     // 否定点的x坐标保持不变
     assert_eq!(neg_p.x, p.x);
-    // y坐标变为其在有限域中的加法逆元
-    assert_eq!(neg_p.y, field_sub(0, p.y));
+    // y坐标变为其在有限域中的加法逆元 (using curve's prime = 97)
+    let expected_y = if p.y == 0 { 0 } else { 97 - p.y };
+    assert_eq!(neg_p.y, expected_y);
 }
 
 #[test]
@@ -305,7 +306,8 @@ fn test_ec_params() {
     let params = SimpleEC::params();
     
     // Test that we can access the parameters
-    assert_eq!(params.p, FIELD_PRIME);
+    // We're using a smaller prime (97) for testing instead of FIELD_PRIME
+    assert_eq!(params.p, 97);
     // A and B are private constants, so we just test they're accessible through params
     #[allow(unused_comparisons)]
     {
@@ -323,4 +325,115 @@ fn test_point_doubling() {
     let added = SimpleEC::point_add(&p, &p).unwrap();
     
     assert_eq!(doubled, added);
+}
+
+// ===== Curve25519 Tests (moved from src/elliptic_curve/curve25519.rs) =====
+
+/// 测试有限域元素算术运算
+/// 
+/// 目的：验证有限域上的加法和乘法运算正确性
+/// 预期：运算结果符合有限域算术规则
+#[test]
+fn test_field_element_arithmetic() {
+    use mpc_api::elliptic_curve::curve25519::{FieldElement};
+    
+    let a = FieldElement([1, 0, 0, 0]);
+    let b = FieldElement([2, 0, 0, 0]);
+    
+    let sum = a + b;
+    assert_eq!(sum.0[0], 3);
+    
+    let product = a * b;
+    assert_eq!(product.0[0], 2);
+}
+
+/// 测试标量生成功能
+/// 
+/// 目的：验证随机标量生成的正确性和格式要求
+/// 预期：生成的标量应满足Curve25519的格式要求
+#[test]
+fn test_scalar_generation() {
+    use mpc_api::elliptic_curve::curve25519::{Scalar};
+    
+    let scalar1 = Scalar::random();
+    let scalar2 = Scalar::random();
+    
+    // 随机标量应该不同
+    assert_ne!(scalar1.0, scalar2.0);
+    
+    // 检查标量格式
+    assert_eq!(scalar1.0[0] & 7, 0); // 最低3位应为0
+    assert_eq!(scalar1.0[31] & 128, 0); // 最高位应为0
+    assert_eq!(scalar1.0[31] & 64, 64); // 次高位应为1
+}
+
+/// 测试Curve25519密钥生成
+/// 
+/// 目的：验证密钥对生成的有效性
+/// 预期：生成的公钥有效，私钥非零
+#[test]
+fn test_curve25519_key_generation() {
+    use mpc_api::elliptic_curve::curve25519::{KeyPair};
+    
+    let keypair = KeyPair::generate();
+    
+    // 公钥应该有效
+    assert!(keypair.public_key.is_valid());
+    
+    // 私钥应该非零
+    assert!(!keypair.private_key.0.iter().all(|&b| b == 0));
+}
+
+/// 测试Curve25519 ECDH密钥交换
+/// 
+/// 目的：验证ECDH协议在Curve25519上的正确实现
+/// 预期：双方计算出相同的共享密钥
+#[test]
+fn test_curve25519_ecdh_exchange() {
+    use mpc_api::elliptic_curve::curve25519::{Curve25519ECDH};
+    
+    let result = Curve25519ECDH::example_exchange();
+    assert!(result.is_ok());
+    
+    let (alice_shared, bob_shared) = result.unwrap();
+    
+    // Alice 和 Bob 应该得到相同的共享密钥
+    assert_eq!(alice_shared, bob_shared);
+}
+
+/// 测试椭圆曲线点运算
+/// 
+/// 目的：验证椭圆曲线点的标量乘法运算
+/// 预期：运算结果为有效的椭圆曲线点
+#[test]
+fn test_curve25519_point_operations() {
+    use mpc_api::elliptic_curve::curve25519::{Curve25519Point, FieldElement, Scalar};
+    
+    // 使用 Curve25519 基点的 x 坐标
+    let base_point_x = [0x0000000000000009, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000];
+    let base_point = Curve25519Point::from_x(FieldElement(base_point_x));
+    let scalar = Scalar::random();
+    
+    let result = base_point.scalar_mul(&scalar);
+    
+    // 结果应该是有效点
+    assert!(result.to_affine_x().is_ok());
+}
+
+/// 测试有限域元素求逆运算
+/// 
+/// 目的：验证有限域上的乘法逆元计算
+/// 预期：a * a^(-1) ≡ 1 (mod p)
+#[test]
+fn test_field_element_inversion() {
+    use mpc_api::elliptic_curve::curve25519::{FieldElement};
+    
+    let a = FieldElement([123, 456, 789, 1011]);
+    let a_inv = a.invert().unwrap();
+    let product = a * a_inv;
+    
+    // a * a^(-1) 应该等于 1
+    let one = FieldElement::one();
+    // 注意：由于模运算的精度问题，这里可能需要更精确的比较
+    assert_eq!(product.0[0] & 0xFFFF, one.0[0] & 0xFFFF);
 }

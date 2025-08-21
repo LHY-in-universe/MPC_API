@@ -1,5 +1,30 @@
 //! # 简化的 MPC 网络演示程序 (Simple MPC Network Demo)
 //!
+//! ## Bash 测试代码
+//!
+//! ```bash
+//! # 编译检查
+//! cargo check --example simple_network_demo
+//!
+//! # 运行简化网络演示
+//! cargo run --example simple_network_demo
+//!
+//! # 运行所有测试
+//! cargo test --example simple_network_demo
+//!
+//! # 运行特定网络测试
+//! cargo test test_mpc_node_creation
+//! cargo test test_session_management
+//! cargo test test_mpc_message_serialization
+//! cargo test test_secret_sharing_basic
+//!
+//! # 网络性能基准测试
+//! cargo bench --bench mpc_benchmarks -- simple_network
+//!
+//! # 生成简化网络文档
+//! cargo doc --example simple_network_demo --open
+//! ```
+//!
 //! 这个示例展示了如何使用 MPC API 的网络模块进行基本的网络通信。
 //! 包括 P2P 节点创建、HTTP API 使用等核心功能。
 

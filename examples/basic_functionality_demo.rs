@@ -4,6 +4,32 @@
 //! 专为初学者和希望快速上手的开发者设计。通过实际可运行的代码示例，
 //! 展示安全多方计算的核心概念和基础操作。
 //! 
+//! ## Bash 测试代码
+//! 
+//! ```bash
+//! # 编译检查
+//! cargo check --example basic_functionality_demo
+//! 
+//! # 运行完整演示
+//! cargo run --example basic_functionality_demo
+//! 
+//! # 运行所有测试
+//! cargo test --example basic_functionality_demo
+//! 
+//! # 运行特定功能测试
+//! cargo test test_field_operations_demo
+//! cargo test test_secret_sharing_demo
+//! cargo test test_beaver_triples_demo
+//! cargo test test_hash_commitment_demo
+//! cargo test test_merkle_tree_demo
+//! 
+//! # 性能基准测试
+//! cargo bench --bench simple_benchmarks
+//! 
+//! # 生成文档
+//! cargo doc --example basic_functionality_demo --open
+//! ```
+//! 
 //! ## 🎯 学习目标
 //! 
 //! 通过本演示，您将掌握：

@@ -3,6 +3,28 @@
 //! 本示例详细展示了如何使用可信第三方来高效生成和管理 Beaver 三元组，
 //! 这是安全多方计算中用于安全乘法的核心预处理材料。
 //! 
+//! ## Bash 测试代码
+//! 
+//! ```bash
+//! # 编译检查
+//! cargo check --example beaver_triples_trusted_party_example
+//! 
+//! # 运行完整示例
+//! cargo run --example beaver_triples_trusted_party_example
+//! 
+//! # 运行所有测试
+//! cargo test --example beaver_triples_trusted_party_example
+//! 
+//! # 运行可信第三方相关测试
+//! cargo test --test trusted_party_tests
+//! 
+//! # 性能基准测试
+//! cargo bench --bench mpc_benchmarks -- trusted_party
+//! 
+//! # 生成文档
+//! cargo doc --example beaver_triples_trusted_party_example --open
+//! ```
+//! 
 //! ## 🎯 学习目标
 //! 
 //! 通过本示例，您将学会：

@@ -1,5 +1,27 @@
 //! # 网络模块使用示例 (Network Module Usage Example)
 //!
+//! ## Bash 测试代码
+//!
+//! ```bash
+//! # 编译检查
+//! cargo check --example network_example
+//!
+//! # 运行网络示例
+//! cargo run --example network_example
+//!
+//! # 运行所有网络测试
+//! cargo test --example network_example
+//!
+//! # 运行网络集成测试
+//! cargo test --test network_integration_tests
+//!
+//! # 网络性能基准测试
+//! cargo bench --bench mpc_benchmarks -- network
+//!
+//! # 生成网络文档
+//! cargo doc --example network_example --open
+//! ```
+//!
 //! 本示例展示如何使用 MPC API 的网络模块进行 P2P 和 HTTP 通信
 
 use mpc_api::network::{

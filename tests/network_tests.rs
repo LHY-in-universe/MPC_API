@@ -117,6 +117,53 @@ mod p2p_tests {
         // 验证配置被正确设置
         assert!(!node.node_id.is_empty());
     }
+
+    /// 测试 P2P 节点创建功能
+    /// 
+    /// 目的：验证 P2P 节点能够正确创建
+    /// 预期：节点创建成功，返回 Ok 结果
+    #[tokio::test]
+    async fn test_p2p_node_creation_from_source() {
+        let config = PeerConfig::default();
+        let node = P2PNode::new(config).await;
+        assert!(node.is_ok(), "Failed to create P2P node");
+    }
+
+    /// 测试对等节点发现功能
+    /// 
+    /// 目的：验证对等节点发现服务能够正确创建
+    /// 预期：发现服务创建成功，返回 Ok 结果
+    #[tokio::test]
+    async fn test_peer_discovery_from_source() {
+        use mpc_api::network::p2p::PeerDiscovery;
+        let config = PeerConfig::default();
+        let discovery = PeerDiscovery::new(config);
+        assert!(discovery.is_ok(), "Failed to create peer discovery");
+    }
+
+    /// 测试默认消息处理器
+    /// 
+    /// 目的：验证默认消息处理器能够正确处理 ping-pong 协议
+    /// 预期：处理器能够接收 ping 消息并返回 pong 响应
+    #[test]
+    fn test_default_message_handler_from_source() {
+        use mpc_api::network::p2p::DefaultMessageHandler;
+        use mpc_api::network::p2p::MessageHandler;
+        use mpc_api::network::protocol::NetworkMessage;
+        
+        let handler = DefaultMessageHandler;
+        let message = NetworkMessage::new("ping", b"test");
+        
+        // Test that handler can be created and message processed
+        tokio::runtime::Runtime::new().unwrap().block_on(async {
+            let result = handler.handle_message("test_peer", &message).await;
+            assert!(result.is_ok(), "Message handling failed");
+            
+            if let Ok(Some(response)) = result {
+                assert_eq!(response.message_type, "pong");
+            }
+        });
+    }
 }
 
 /// HTTP API 测试
@@ -232,6 +279,55 @@ mod http_tests {
             "Bearer test_token".to_string()
         );
         // 验证头部被正确添加
+    }
+
+    /// 测试 HTTP 服务器创建功能
+    /// 
+    /// 目的：验证 HTTP 服务器能够正确创建
+    /// 预期：服务器创建成功，返回 Ok 结果
+    #[tokio::test]
+    async fn test_http_server_creation_from_source() {
+        let config = RestConfig::default();
+        let server = HttpServer::new(config).await;
+        assert!(server.is_ok(), "Failed to create HTTP server");
+    }
+
+    /// 测试 HTTP 客户端创建功能
+    /// 
+    /// 目的：验证 HTTP 客户端能够正确创建
+    /// 预期：客户端创建成功，返回 Ok 结果
+    #[test]
+    fn test_http_client_creation_from_source() {
+        let client = HttpClient::new("http://localhost:3000");
+        assert!(client.is_ok(), "Failed to create HTTP client");
+    }
+
+    /// 测试 HTTP JSON 响应创建
+    /// 
+    /// 目的：验证能够正确创建 JSON 格式的 HTTP 响应
+    /// 预期：响应创建成功，状态码为 200，包含正确的 Content-Type 头
+    #[test]
+    fn test_http_response_json_from_source() {
+        let data = serde_json::json!({"test": "value"});
+        let response = HttpResponse::json(&data);
+        assert!(response.is_ok(), "Failed to create JSON response");
+        
+        if let Ok(resp) = response {
+            assert_eq!(resp.status_code, 200);
+            assert!(resp.headers.contains_key("Content-Type"));
+        }
+    }
+
+    /// 测试 HTTP 方法名称
+    /// 
+    /// 目的：验证 HTTP 方法枚举能够返回正确的字符串名称
+    /// 预期：每个方法返回对应的大写字符串名称
+    #[test]
+    fn test_http_method_name_from_source() {
+        assert_eq!(HttpMethod::GET.name(), "GET");
+        assert_eq!(HttpMethod::POST.name(), "POST");
+        assert_eq!(HttpMethod::PUT.name(), "PUT");
+        assert_eq!(HttpMethod::DELETE.name(), "DELETE");
     }
 }
 
@@ -862,7 +958,7 @@ mod performance_tests {
 #[tokio::test]
 async fn test_network_config_validation() {
     let config = NetworkConfig::default();
-    assert!(utils::validate_config(&config).is_ok());
+    assert!(mpc_api::network::common::utils::validate_network_config(&config).is_ok());
 }
 
 #[tokio::test]

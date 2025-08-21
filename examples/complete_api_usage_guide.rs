@@ -1,5 +1,33 @@
 //! # MPC API 完整使用指南 (可编译版本)
 //! 
+//! ## Bash 测试代码
+//! 
+//! ```bash
+//! # 编译检查
+//! cargo check --example complete_api_usage_guide
+//! 
+//! # 运行完整API指南
+//! cargo run --example complete_api_usage_guide
+//! 
+//! # 运行所有测试
+//! cargo test --example complete_api_usage_guide
+//! 
+//! # 运行特定模块测试
+//! cargo test test_secret_sharing_guide
+//! cargo test test_beaver_triples_guide
+//! cargo test test_commitment_guide
+//! cargo test test_authentication_guide
+//! cargo test test_field_operations_guide
+//! cargo test test_garbled_circuits_guide
+//! cargo test test_application_examples
+//! 
+//! # 性能基准测试
+//! cargo bench --bench mpc_benchmarks -- complete_api
+//! 
+//! # 生成完整API文档
+//! cargo doc --example complete_api_usage_guide --open
+//! ```
+//! 
 //! 本文档展示了 MPC API 中当前实际可用组件的使用方法，是学习安全多方计算的完整指南。
 //! 
 //! ## 🎯 学习目标

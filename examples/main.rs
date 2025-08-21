@@ -1,5 +1,30 @@
 //! # MPC API Beaver 三元组示例程序入口
 //! 
+//! ## Bash 测试代码
+//! 
+//! ```bash
+//! # 编译检查
+//! cargo check --example main
+//! 
+//! # 运行主程序（所有示例）
+//! cargo run --example main
+//! 
+//! # 运行特定方法示例
+//! cargo run --example main ole
+//! cargo run --example main bfv
+//! cargo run --example main trusted
+//! cargo run --example main comparison
+//! 
+//! # 显示帮助信息
+//! cargo run --example main help
+//! 
+//! # 性能基准测试
+//! cargo bench --bench mpc_benchmarks -- beaver
+//! 
+//! # 生成主程序文档
+//! cargo doc --example main --open
+//! ```
+//! 
 //! 这个程序演示了三种不同的 Beaver 三元组生成方法：
 //! 1. OLE (不经意线性求值) 方法
 //! 2. BFV (同态加密) 方法

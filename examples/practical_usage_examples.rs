@@ -1,5 +1,32 @@
 //! Practical Usage Examples for MPC API
 //! 
+//! ## Bash 测试代码
+//! 
+//! ```bash
+//! # 编译检查
+//! cargo check --example practical_usage_examples
+//! 
+//! # 运行实用示例
+//! cargo run --example practical_usage_examples
+//! 
+//! # 运行所有测试
+//! cargo test --example practical_usage_examples
+//! 
+//! # 运行特定实用示例测试
+//! cargo test test_secure_average_salary
+//! cargo test test_private_set_intersection
+//! cargo test test_secure_auction
+//! cargo test test_distributed_key_generation
+//! cargo test test_privacy_preserving_ml
+//! cargo test test_threshold_signature
+//! 
+//! # 实用示例性能基准测试
+//! cargo bench --bench mpc_benchmarks -- practical_usage
+//! 
+//! # 生成实用示例文档
+//! cargo doc --example practical_usage_examples --open
+//! ```
+//! 
 //! This file contains real-world examples demonstrating how to use the MPC API
 //! for common secure multi-party computation scenarios.
 

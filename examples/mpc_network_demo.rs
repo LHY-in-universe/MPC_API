@@ -1,5 +1,30 @@
 //! # MPC 网络演示程序 (MPC Network Demo)
 //!
+//! ## Bash 测试代码
+//!
+//! ```bash
+//! # 编译检查
+//! cargo check --example mpc_network_demo
+//!
+//! # 运行MPC网络演示
+//! cargo run --example mpc_network_demo
+//!
+//! # 运行所有测试
+//! cargo test --example mpc_network_demo
+//!
+//! # 运行特定网络测试
+//! cargo test test_mpc_node_creation
+//! cargo test test_session_management
+//! cargo test test_mpc_message_serialization
+//! cargo test test_secret_sharing_encoding
+//!
+//! # MPC网络性能基准测试
+//! cargo bench --bench mpc_benchmarks -- mpc_network
+//!
+//! # 生成MPC网络文档
+//! cargo doc --example mpc_network_demo --open
+//! ```
+//!
 //! 这个示例展示了如何使用 MPC API 的网络模块进行分布式多方安全计算。
 //! 包括 P2P 节点通信、HTTP API 服务、秘密分享网络传输等功能。
 

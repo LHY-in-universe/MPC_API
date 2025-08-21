@@ -40,7 +40,7 @@ fn test_secret_sharing_error_handling() {
     // Test reconstruction with inconsistent share indices
     let mut bad_shares = shares[0..3].to_vec();
     bad_shares[1].x = bad_shares[0].x; // Duplicate x coordinate
-    let result = ShamirSecretSharing::reconstruct(&bad_shares, 3);
+    let _result = ShamirSecretSharing::reconstruct(&bad_shares, 3);
     // This should either error or handle gracefully
     // The specific behavior depends on the implementation
 }
@@ -185,7 +185,6 @@ fn test_oblivious_transfer_error_handling() {
 /// Test concurrent access and thread safety
 #[test]
 fn test_concurrent_error_handling() {
-    use std::sync::Arc;
     use std::thread;
     
     // Test multiple threads sharing secrets simultaneously

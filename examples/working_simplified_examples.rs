@@ -1,5 +1,24 @@
 //! # 简化的可工作MPC示例
 //! 
+//! ## Bash 测试代码
+//! 
+//! ```bash
+//! # 编译检查
+//! cargo check --example working_simplified_examples
+//! 
+//! # 运行简化示例
+//! cargo run --example working_simplified_examples
+//! 
+//! # 运行所有测试
+//! cargo test --example working_simplified_examples
+//! 
+//! # 性能基准测试
+//! cargo bench --bench mpc_benchmarks -- simplified
+//! 
+//! # 生成简化示例文档
+//! cargo doc --example working_simplified_examples --open
+//! ```
+//! 
 //! 包含当前API中能够正常编译和运行的基本示例
 
 use mpc_api::{

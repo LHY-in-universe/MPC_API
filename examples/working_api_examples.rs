@@ -1,5 +1,34 @@
 //! # MPC API 实际可用示例
 //! 
+//! ## Bash 测试代码
+//! 
+//! ```bash
+//! # 编译检查
+//! cargo check --example working_api_examples
+//! 
+//! # 运行实际可用示例
+//! cargo run --example working_api_examples
+//! 
+//! # 运行所有测试
+//! cargo test --example working_api_examples
+//! 
+//! # 运行特定功能测试
+//! cargo test test_complete_shamir_example
+//! cargo test test_additive_sharing_example
+//! cargo test test_trusted_party_beaver_example
+//! cargo test test_batch_beaver_example
+//! cargo test test_multi_party_computation_example
+//! cargo test test_private_auction_example
+//! cargo test test_basic_field_operations
+//! cargo test test_large_number_operations
+//! 
+//! # 性能基准测试
+//! cargo bench --bench mpc_benchmarks -- working_api
+//! 
+//! # 生成工作示例文档
+//! cargo doc --example working_api_examples --open
+//! ```
+//! 
 //! 本文档展示了当前MPC API中实际可用的组件使用方法，
 //! 这些示例都是可以编译和运行的。
 

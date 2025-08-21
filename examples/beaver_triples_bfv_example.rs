@@ -4,6 +4,32 @@
 //! 生成 Beaver 三元组的完整教程。BFV 代表了当前最先进的安全多方计算技术，
 //! 提供抗量子攻击的安全保证和在密文状态下的计算能力。
 //! 
+//! ## Bash 测试代码
+//! 
+//! ```bash
+//! # 编译检查
+//! cargo check --example beaver_triples_bfv_example
+//! 
+//! # 运行完整示例
+//! cargo run --example beaver_triples_bfv_example
+//! 
+//! # 运行所有测试
+//! cargo test --example beaver_triples_bfv_example
+//! 
+//! # 运行特定BFV测试
+//! cargo test test_bfv_security_setup
+//! cargo test test_bfv_key_management
+//! cargo test test_basic_bfv_beaver
+//! cargo test test_bfv_secure_multiplication
+//! cargo test test_comprehensive_bfv
+//! 
+//! # BFV性能基准测试
+//! cargo bench --bench mpc_benchmarks -- bfv
+//! 
+//! # 生成BFV文档
+//! cargo doc --example beaver_triples_bfv_example --open
+//! ```
+//! 
 //! ## 🎯 学习目标
 //! 
 //! 通过本指南，您将掌握：

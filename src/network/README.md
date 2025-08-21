@@ -448,14 +448,3 @@ async fn handle_network_operation() -> NetworkResult<()> {
 }
 ```
 
-## 🔗 相关文档
-
-- [项目主 README](../../README.md)
-- [网络模块详细使用指南](../../README_NETWORK.md)
-- [示例代码](../../examples/network_example.rs)
-- [MPC 协议文档](../protocols/README.md)
-- [安全模块文档](../security/README.md)
-
-## 📄 许可证
-
-本项目采用 MIT 或 Apache-2.0 双重许可证。
